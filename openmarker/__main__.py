@@ -110,7 +110,7 @@ def cmd_export(args: argparse.Namespace) -> None:
 
 
 def cmd_send(args: argparse.Namespace) -> None:
-    from . import generate
+    from . import generate, images
 
     _ensure_setup(args)
     host = _host(args)
@@ -120,9 +120,13 @@ def cmd_send(args: argparse.Namespace) -> None:
     else:
         path = Path(args.source)
         kind = tablet.UPLOAD_TYPES.get(path.suffix.lower())
-        if kind is None:
-            sys.exit("Only PDF and EPUB files (or a web address) can be sent.")
         name, data = path.stem, path.read_bytes()
+        if path.suffix.lower() in images.SUFFIXES:
+            picture, applied = images.clean(data, args.background, args.tolerance)
+            print(f"background: {applied}")
+            kind, data = "pdf", images.page_pdf(picture, args.name or name)
+        elif kind is None:
+            sys.exit("Only PDF and EPUB files, pictures, or a web address can be sent.")
     parent = ""
     if args.folder:
         parent = tablet.find_folder(host, args.folder) or tablet.new_folder(host, args.folder, restart=False)
@@ -186,7 +190,10 @@ def main() -> None:
     export.add_argument("--markdown", type=Path, metavar="DIR", help="write Markdown notes into this folder instead")
     export.set_defaults(func=cmd_export)
 
-    send = sub.add_parser("send", help="send a PDF, an EPUB or a web page to the tablet")
+    send = sub.add_parser("send", help="send a PDF, an EPUB, a picture or a web page to the tablet")
+    send.add_argument("--background", choices=("auto", "cutout", "paper", "keep"), default="auto",
+                      help="for pictures: remove a plain backdrop (cutout), flatten a photo of paper (paper), or leave as is")
+    send.add_argument("--tolerance", type=float, default=40, help="for cutout: how far from the backdrop colour still counts (1-200)")
     send.add_argument("source", help="file path or web address")
     send.add_argument("--name", help="name to show on the tablet")
     send.add_argument("--folder", help="top-level folder to put it in (created if missing)")

@@ -136,6 +136,15 @@
   .sheet input, .sheet select { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
   .sheet p { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; }
   .sheet .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  dialog.sheet.wide { width: min(860px, 94vw); }
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .compare figure { margin: 0; }
+  .compare figcaption { color: var(--muted); font-size: 12.5px; margin-bottom: 6px; }
+  .compare .frame { height: 300px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: repeating-conic-gradient(#d9d4c8 0% 25%, #efece4 0% 50%) 0 0 / 18px 18px; }
+  .compare .frame.page { background: #fff; }
+  .compare img { max-width: 100%; max-height: 300px; display: block; }
+  .field { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; margin-top: 10px; font-size: 14px; }
+  .field input[type=range] { padding: 0; accent-color: var(--accent); }
   .busy { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; background: color-mix(in srgb, var(--paper) 78%, transparent); font: 600 18px var(--serif); }
   .busy.on { display: grid; }
   .toast { position: fixed; z-index: 60; left: 50%; bottom: 26px; transform: translate(-50%, 20px); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 999px; opacity: 0; transition: .2s ease; pointer-events: none; font-size: 14px; }
@@ -222,11 +231,13 @@
         <button class="pill accent" id="send" aria-haspopup="true">Send to tablet</button>
         <div class="menu-list">
           <button id="send-file">PDF or EPUB file…</button>
+          <button id="send-image">Picture…</button>
           <button id="send-url">Web page…</button>
           <button id="send-agenda">Today's agenda page</button>
         </div>
       </div>
       <input type="file" id="file" accept=".pdf,.epub" multiple hidden>
+      <input type="file" id="image-file" accept="image/*" hidden>
     </div>
   </header>
   <div class="source" id="source"></div>
@@ -269,6 +280,32 @@
     <div class="row">
       <button class="pill" value="cancel" formnovalidate>Cancel</button>
       <button class="pill accent" value="ok" id="sheet-ok">OK</button>
+    </div>
+  </form>
+</dialog>
+<dialog class="sheet wide" id="image-sheet">
+  <form method="dialog">
+    <h3>Send a picture</h3>
+    <p>The background is made white so the picture shows cleanly on the tablet's screen. It is sent as a one-page PDF you can write on.</p>
+    <div class="compare">
+      <figure><figcaption>Original</figcaption><div class="frame"><img id="image-before" alt="Original picture"></div></figure>
+      <figure><figcaption id="image-caption">On the tablet</figcaption><div class="frame page"><img id="image-after" alt="Picture as it will be sent"></div></figure>
+    </div>
+    <label class="field">Background
+      <select id="image-mode">
+        <option value="auto">Automatic</option>
+        <option value="cutout">Remove a plain backdrop</option>
+        <option value="paper">Flatten a photo of paper or a whiteboard</option>
+        <option value="keep">Leave as it is</option>
+      </select>
+    </label>
+    <label class="field" id="image-tolerance-row">Strength
+      <input type="range" id="image-tolerance" min="5" max="150" value="40">
+    </label>
+    <label class="field">Name <input id="image-name" autocomplete="off" required></label>
+    <div class="row">
+      <button class="pill" value="cancel" formnovalidate>Cancel</button>
+      <button class="pill accent" value="ok" id="image-send">Send to tablet</button>
     </div>
   </form>
 </dialog>
@@ -660,6 +697,54 @@ async function sendFiles(files) {
   }, "Sent to the tablet");
 }
 $("send-file").onclick = () => $("file").click();
+
+// Pictures: preview the cleaned-up result before sending.
+const picture = { file: null, url: null, timer: null };
+const imageQuery = () => `mode=${$("image-mode").value}&tolerance=${$("image-tolerance").value}`;
+async function previewImage() {
+  const asked = imageQuery();
+  $("image-caption").textContent = "Working…";
+  const res = await fetch(`/api/image-preview?${asked}`, { method: "POST", body: picture.file });
+  if (asked !== imageQuery() || !$("image-sheet").open) return;
+  if (!res.ok || !(res.headers.get("Content-Type") || "").startsWith("image/")) {
+    $("image-caption").textContent = "This file couldn't be read as a picture.";
+    $("image-send").disabled = true;
+    return;
+  }
+  const applied = res.headers.get("X-Applied-Mode");
+  const label = { cutout: "plain backdrop removed", paper: "paper flattened", keep: "left as it is" }[applied] || "";
+  $("image-caption").textContent = `On the tablet · ${label}`;
+  $("image-tolerance-row").hidden = applied !== "cutout";
+  $("image-send").disabled = false;
+  if ($("image-after").src.startsWith("blob:")) URL.revokeObjectURL($("image-after").src);
+  $("image-after").src = URL.createObjectURL(await res.blob());
+}
+function openImage(file) {
+  if (picture.url) URL.revokeObjectURL(picture.url);
+  picture.file = file;
+  picture.url = URL.createObjectURL(file);
+  $("image-before").src = picture.url;
+  $("image-after").removeAttribute("src");
+  $("image-mode").value = "auto";
+  $("image-tolerance").value = 40;
+  $("image-name").value = file.name.replace(/\.[^.]+$/, "");
+  $("image-send").disabled = true;
+  const sheet = $("image-sheet");
+  sheet.returnValue = "cancel";
+  sheet.showModal();
+  previewImage();
+}
+$("image-mode").onchange = previewImage;
+$("image-tolerance").oninput = () => { clearTimeout(picture.timer); picture.timer = setTimeout(previewImage, 200); };
+$("image-sheet").addEventListener("close", () => {
+  if ($("image-sheet").returnValue !== "ok" || !picture.file) return;
+  const name = $("image-name").value.trim() || "Picture";
+  const query = `name=${encodeURIComponent(name)}&parent=${currentFolder()}&${imageQuery()}`;
+  const file = picture.file;
+  act(`Sending ${name} to the tablet…`, async () => (await fetch(`/api/upload-image?${query}`, { method: "POST", body: file })).json(), "Picture sent to the tablet");
+});
+$("send-image").onclick = () => $("image-file").click();
+$("image-file").onchange = event => { if (event.target.files[0]) openImage(event.target.files[0]); event.target.value = ""; };
 $("file").onchange = event => { sendFiles(event.target.files); event.target.value = ""; };
 $("send-url").onclick = async () => {
   const url = await ask({ title: "Send a web page", text: "The page is saved as a PDF and sent to the current folder.", value: "https://", ok: "Send" });
@@ -678,7 +763,10 @@ addEventListener("drop", event => {
   event.preventDefault();
   dragDepth = 0;
   document.body.classList.remove("drop");
-  if (event.dataTransfer?.files.length) sendFiles(event.dataTransfer.files);
+  const dropped = [...(event.dataTransfer?.files || [])];
+  const image = dropped.find(f => f.type.startsWith("image/"));
+  if (image && !$("send").disabled) openImage(image);
+  else if (dropped.length) sendFiles(dropped);
 });
 
 // Viewer actions

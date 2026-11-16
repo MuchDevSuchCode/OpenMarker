@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import export, generate, history, library, ocr, render, scene, tablet, workflow
+from . import export, generate, history, images, library, ocr, render, scene, tablet, workflow
 
 PORT = 8737
 AUTO_SYNC_SECONDS = 30
@@ -235,6 +235,18 @@ def _id(body: dict, key: str, allow: tuple[str, ...] = ()) -> str:
     return value
 
 
+def cleaned_image(raw: bytes, query: dict):
+    """The uploaded picture with its background made white, per the request's mode and tolerance."""
+    if not raw:
+        raise UserError("That picture is empty.")
+    mode = query.get("mode", ["auto"])[0]
+    try:
+        tolerance = min(200.0, max(1.0, float(query.get("tolerance", [images.DEFAULT_TOLERANCE])[0])))
+        return images.clean(raw, mode, tolerance)
+    except (ValueError, OSError) as exc:
+        raise UserError("That file couldn't be read as a picture.") from exc
+
+
 def change(action: str, body: dict, raw: bytes = b"", query: dict | None = None) -> dict:
     """Operations that write to the tablet. Each ends with a sync so the UI is current."""
     host = require_tablet()
@@ -249,6 +261,11 @@ def change(action: str, body: dict, raw: bytes = b"", query: dict | None = None)
                 raise UserError("That file is empty.")
             parent = query.get("parent", [""])[0]
             tablet.upload(host, Path(name).stem[:200], raw, tablet.UPLOAD_TYPES[suffix], _id({"p": parent}, "p", ("",)))
+        elif action == "upload-image":
+            name = Path(query.get("name", ["Picture"])[0].strip()).stem[:200] or "Picture"
+            picture, _ = cleaned_image(raw, query)
+            parent = query.get("parent", [""])[0]
+            tablet.upload(host, name, images.page_pdf(picture, name), "pdf", _id({"p": parent}, "p", ("",)))
         elif action == "send-url":
             title, data = generate.web_page_pdf(str(body.get("url", "")).strip())
             tablet.upload(host, title, data, "pdf", _id(body, "parent", ("",)))
@@ -393,7 +410,7 @@ class Handler(BaseHTTPRequestHandler):
         url = urlparse(self.path)
         action = url.path.removeprefix("/api/")
         body: dict = {}
-        if action != "upload":
+        if action not in ("upload", "upload-image", "image-preview"):
             try:
                 body = json.loads(raw or b"{}")
             except ValueError:
@@ -403,7 +420,17 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"ok": False, "error": "Request must be a JSON object."}, 400)
                 return
         try:
-            if action == "sync":
+            if action == "image-preview":
+                picture, applied = cleaned_image(raw, parse_qs(url.query))
+                self.send_response(200)
+                body_png = images.preview_png(picture)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(body_png)))
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Applied-Mode", applied)
+                self.end_headers()
+                self.wfile.write(body_png)
+            elif action == "sync":
                 self._json(sync())
             elif action == "config":
                 changes = {}
