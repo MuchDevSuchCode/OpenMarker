@@ -17,6 +17,10 @@ dependencies = [
     "winrt-Windows.UI.Input.Inking; sys_platform == 'win32'",
 ]
 
+[project.optional-dependencies]
+# Cutting the subject out of photos with a local segmentation model.
+ai = ["rembg[cpu]>=2.0"]
+
 [project.scripts]
 openmarker = "openmarker.__main__:main"
 

@@ -191,8 +191,9 @@ def main() -> None:
     export.set_defaults(func=cmd_export)
 
     send = sub.add_parser("send", help="send a PDF, an EPUB, a picture or a web page to the tablet")
-    send.add_argument("--background", choices=("auto", "cutout", "paper", "keep"), default="auto",
-                      help="for pictures: remove a plain backdrop (cutout), flatten a photo of paper (paper), or leave as is")
+    send.add_argument("--background", choices=("auto", "subject", "cutout", "paper", "keep"), default="auto",
+                      help="for pictures: cut out the main subject with a local model (subject), remove a plain "
+                           "backdrop (cutout), flatten a photo of paper (paper), or leave as is")
     send.add_argument("--tolerance", type=float, default=40, help="for cutout: how far from the backdrop colour still counts (1-200)")
     send.add_argument("source", help="file path or web address")
     send.add_argument("--name", help="name to show on the tablet")

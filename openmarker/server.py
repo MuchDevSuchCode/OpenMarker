@@ -67,6 +67,7 @@ def status() -> dict:
         "last_sync": config.get("last_sync"),
         "source": store_dir()[1],
         "handwriting_search": ocr.available(),
+        "subject_cutout": images.subject_available(),
     }
 
 
@@ -243,6 +244,8 @@ def cleaned_image(raw: bytes, query: dict):
     try:
         tolerance = min(200.0, max(1.0, float(query.get("tolerance", [images.DEFAULT_TOLERANCE])[0])))
         return images.clean(raw, mode, tolerance)
+    except RuntimeError as exc:
+        raise UserError(str(exc)) from exc
     except (ValueError, OSError) as exc:
         raise UserError("That file couldn't be read as a picture.") from exc
 

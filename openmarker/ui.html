@@ -294,6 +294,7 @@
     <label class="field">Background
       <select id="image-mode">
         <option value="auto">Automatic</option>
+        <option value="subject" id="image-subject">Cut out the subject (AI, on this computer)</option>
         <option value="cutout">Remove a plain backdrop</option>
         <option value="paper">Flatten a photo of paper or a whiteboard</option>
         <option value="keep">Leave as it is</option>
@@ -629,6 +630,7 @@ async function loadStatus() {
   $("sync").disabled = !s.connected || !s.set_up || $("sync").dataset.busy === "1";
   if (document.activeElement !== $("wifi-host")) $("wifi-host").value = s.wifi_host;
   $("auto").checked = s.auto_sync;
+  $("image-subject").disabled = !s.subject_cutout;
   for (const id of ["send", "new-folder"]) $(id).disabled = !s.connected || !s.set_up;
   if (s.last_sync && state.lastSync && s.last_sync !== state.lastSync) loadLibrary();  // a background sync finished
   state.lastSync = s.last_sync;
@@ -703,16 +705,16 @@ const picture = { file: null, url: null, timer: null };
 const imageQuery = () => `mode=${$("image-mode").value}&tolerance=${$("image-tolerance").value}`;
 async function previewImage() {
   const asked = imageQuery();
-  $("image-caption").textContent = "Working…";
+  $("image-caption").textContent = $("image-mode").value === "cutout" ? "Working…" : "Working… the first cut-out can take a while";
   const res = await fetch(`/api/image-preview?${asked}`, { method: "POST", body: picture.file });
   if (asked !== imageQuery() || !$("image-sheet").open) return;
   if (!res.ok || !(res.headers.get("Content-Type") || "").startsWith("image/")) {
-    $("image-caption").textContent = "This file couldn't be read as a picture.";
+    $("image-caption").textContent = (await res.json().catch(() => ({}))).error || "This file couldn't be read as a picture.";
     $("image-send").disabled = true;
     return;
   }
   const applied = res.headers.get("X-Applied-Mode");
-  const label = { cutout: "plain backdrop removed", paper: "paper flattened", keep: "left as it is" }[applied] || "";
+  const label = { subject: "subject cut out", cutout: "plain backdrop removed", paper: "paper flattened", keep: "left as it is" }[applied] || "";
   $("image-caption").textContent = `On the tablet · ${label}`;
   $("image-tolerance-row").hidden = applied !== "cutout";
   $("image-send").disabled = false;

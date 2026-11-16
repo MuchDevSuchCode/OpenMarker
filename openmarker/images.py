@@ -3,25 +3,34 @@
 E-ink shows anything that is not pure white as visible grey or dither, and
 shows transparency as black. So the background is turned white first:
 
+    subject a segmentation model finds the main subject and removes everything
+            else, however busy the background (people, objects, pets). Runs
+            on this machine; needs the optional `rembg` package and downloads
+            its model (about 180 MB) the first time.
     cutout  a plain backdrop is removed, keeping the subject (logos, product
             shots, drawings on a flat colour). Works from the picture's edges
-            inwards; it does not recognise objects.
+            inwards, so it is exact for flat colours but does not recognise
+            objects.
     paper   a photo of paper or a whiteboard is flattened: uneven lighting and
             shadows are evened out and the sheet becomes white.
     keep    the picture is used as it is.
     auto    transparency is filled with white; otherwise `cutout` if the edges
-            are one flat colour, else `paper`.
+            are one flat colour, else `subject` (or `paper` without the model).
 """
 from __future__ import annotations
 
 import io
+import threading
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageOps
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 
-MODES = ("auto", "cutout", "paper", "keep")
+MODES = ("auto", "subject", "cutout", "paper", "keep")
+SUBJECT_MODEL = "isnet-general-use"
+_session = None
+_session_lock = threading.Lock()
 SUFFIXES = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff")
 PAGE_SHORT, PAGE_LONG = 1620, 2160  # the tablet's page, in pixels and PDF points
 MARGIN = 90
@@ -74,6 +83,28 @@ def cutout(image: Image.Image, tolerance: float = DEFAULT_TOLERANCE) -> Image.Im
     return Image.fromarray((pixels * (1 - blend) + 255 * blend).astype(np.uint8))
 
 
+def subject_available() -> bool:
+    try:
+        import rembg  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def subject(image: Image.Image) -> Image.Image:
+    """Keep the main subject, found by a segmentation model, on white."""
+    global _session
+    if not subject_available():
+        raise RuntimeError("Subject cut-out needs the rembg package: pip install \"rembg[cpu]\"")
+    from rembg import new_session, remove
+
+    with _session_lock:  # one model in memory, one picture at a time
+        if _session is None:
+            _session = new_session(SUBJECT_MODEL, providers=["CPUExecutionProvider"])
+        cut = remove(image, session=_session)
+    return _on_white(cut)
+
+
 def paper(image: Image.Image) -> Image.Image:
     """Flatten a photo of paper: divide out the lighting, then lift the sheet to white."""
     small_size = (max(1, image.width // 8), max(1, image.height // 8))
@@ -98,8 +129,15 @@ def clean(data: bytes, mode: str = "auto", tolerance: float = DEFAULT_TOLERANCE)
     transparent = _has_transparency(image)
     rgb = _on_white(image)
     if mode == "auto":
-        mode = "keep" if transparent else "cutout" if _flat_edges(rgb) else "paper"
-    if mode == "cutout":
+        if transparent:
+            mode = "keep"
+        elif _flat_edges(rgb):
+            mode = "cutout"
+        else:
+            mode = "subject" if subject_available() else "paper"
+    if mode == "subject":
+        rgb = subject(rgb)
+    elif mode == "cutout":
         rgb = cutout(rgb, tolerance)
     elif mode == "paper":
         rgb = paper(rgb)
