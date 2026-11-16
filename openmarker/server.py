@@ -1,42 +1,41 @@
 """Local web UI. Serves only on 127.0.0.1."""
 from __future__ import annotations
 
+import io
 import json
 import re
-import socket
 import threading
+import time
 import webbrowser
-from datetime import datetime, timezone
+from datetime import date
 from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
-from . import library, render, tablet
+from . import export, generate, history, library, ocr, render, scene, tablet, workflow
 
 PORT = 8737
+AUTO_SYNC_SECONDS = 30
+MAX_UPLOAD = 500 * 1024 * 1024
 UUID = r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}"
-PAGE_ROUTE = re.compile(rf"^/api/page/({UUID})/({UUID})\.svg$")
-THUMB_ROUTE = re.compile(rf"^/api/thumb/({UUID})\.png$")
-PDF_ROUTE = re.compile(rf"^/api/pdf/({UUID})\.pdf$")
+ROUTES = {
+    "original": re.compile(rf"^/api/original/({UUID})\.(pdf|epub)$"),
+    "page": re.compile(rf"^/api/page/({UUID})/({UUID})\.svg$"),
+    "thumb": re.compile(rf"^/api/thumb/({UUID})\.png$"),
+    "pdf": re.compile(rf"^/api/pdf/({UUID})\.pdf$"),
+    "source": re.compile(rf"^/api/source/({UUID})/(\d+)\.png$"),
+    "export": re.compile(rf"^/api/export/({UUID})\.pdf$"),
+    "history": re.compile(rf"^/api/history/({UUID})$"),
+    "text": re.compile(rf"^/api/text/({UUID})\.(json|txt|md)$"),
+}
+SNAPSHOT = re.compile(r"\d{8}T\d{12}Z")
 UI_FILE = Path(__file__).with_name("ui.html")
 _sync_lock = threading.Lock()
 
 
-def config_path() -> Path:
-    return Path.home() / "openmarker" / "config.json"
-
-
-def load_config() -> dict:
-    try:
-        return json.loads(config_path().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {}
-
-
-def save_config(config: dict) -> None:
-    config_path().parent.mkdir(parents=True, exist_ok=True)
-    config_path().write_text(json.dumps(config, indent=2), encoding="utf-8")
+class UserError(Exception):
+    """A problem to show to the user as-is."""
 
 
 def store_dir() -> tuple[Path, str]:
@@ -47,50 +46,42 @@ def store_dir() -> tuple[Path, str]:
     return library.default_store(), "desktop"
 
 
-def reachable(host: str) -> bool:
-    try:
-        with socket.create_connection((host, 22), timeout=0.7):
-            return True
-    except OSError:
-        return False
-
-
-def find_tablet() -> tuple[str | None, str | None]:
-    """First reachable address and how it is connected."""
-    if reachable(tablet.USB_HOST):
-        return tablet.USB_HOST, "USB"
-    wifi = load_config().get("wifi_host")
-    if wifi and reachable(wifi):
-        return wifi, "Wi-Fi"
-    return None, None
+def require_tablet() -> str:
+    if not tablet.is_set_up():
+        raise UserError("Run setup first: python -m openmarker setup")
+    host, _ = workflow.find_tablet()
+    if host is None:
+        raise UserError("The tablet isn't reachable. Wake it and connect USB or Wi-Fi.")
+    return host
 
 
 def status() -> dict:
-    host, via = find_tablet()
-    config = load_config()
+    host, via = workflow.find_tablet()
+    config = workflow.load_config()
     return {
         "set_up": tablet.is_set_up(),
         "connected": host is not None,
         "via": via,
-        "host": host,
         "wifi_host": config.get("wifi_host", ""),
+        "auto_sync": bool(config.get("auto_sync")),
         "last_sync": config.get("last_sync"),
         "source": store_dir()[1],
+        "handwriting_search": ocr.available(),
     }
 
 
 def library_json() -> dict:
     store, source = store_dir()
-    items = library.load(store)
     out = []
-    for item in items.values():
-        inked = item.annotated_pages()
+    for item in library.load(store).values():
+        has_pdf = (store / f"{item.id}.pdf").exists()
         thumb = None
-        if not item.is_folder:
-            if item.file_type == "notebook" and item.page_ids:
-                thumb = f"/api/page/{item.id}/{item.page_ids[0]}.svg"
-            elif any((store / f"{item.id}.thumbnails").glob("*.png")):
-                thumb = f"/api/thumb/{item.id}.png"
+        if not item.is_folder and item.page_ids:
+            first = item.page_ids[0]
+            if has_pdf and first in item.source_pages:
+                thumb = f"/api/source/{item.id}/{item.source_pages[first]}.png"
+            elif item.file_type != "epub":
+                thumb = f"/api/page/{item.id}/{first}.svg"
         out.append(
             {
                 "id": item.id,
@@ -99,49 +90,217 @@ def library_json() -> dict:
                 "folder": item.is_folder,
                 "type": item.file_type,
                 "pages": item.page_ids,
-                "inked": inked,
+                "source_pages": item.source_pages,
                 "modified": item.modified.isoformat() if item.modified else None,
                 "thumb": thumb,
-                "has_pdf": (store / f"{item.id}.pdf").exists(),
+                "has_pdf": has_pdf,
+                "has_original": item.file_type in {"pdf", "epub"} and (store / f"{item.id}.{item.file_type}").exists(),
+                "tags": item.tags,
             }
         )
     return {"source": source, "items": out}
 
 
-@lru_cache(maxsize=256)
-def _rendered(path: str, mtime: float) -> bytes:
-    return render.page_svg(Path(path)).encode("utf-8")
+@lru_cache(maxsize=64)
+def _source_png(path: str, mtime: float, number: int) -> bytes:
+    import pypdfium2
 
-
-def sync() -> dict:
-    if not tablet.is_set_up():
-        return {"ok": False, "error": "needs_setup"}
-    host, via = find_tablet()
-    if host is None:
-        return {"ok": False, "error": "not_connected"}
-    if not _sync_lock.acquire(blocking=False):
-        return {"ok": False, "error": "busy"}
+    document = pypdfium2.PdfDocument(path)
     try:
-        result = tablet.pull(host)
+        page = document[number]
+        width, _ = page.get_size()
+        image = page.render(scale=min(2.0, 1400 / width)).to_pil()
+        buffer = io.BytesIO()
+        image.save(buffer, "PNG")
+        return buffer.getvalue()
+    finally:
+        document.close()
+
+
+@lru_cache(maxsize=64)
+def _source_size(path: str, mtime: float, number: int) -> tuple[float, float]:
+    import pypdfium2
+
+    document = pypdfium2.PdfDocument(path)
+    try:
+        return document[number].get_size()
+    finally:
+        document.close()
+
+
+@lru_cache(maxsize=256)
+def _page(path: str, mtime: float) -> scene.Page:
+    return scene.load(Path(path))
+
+
+def page_svg(doc: str, page_id: str, query: dict) -> bytes:
+    """One page as SVG. Query: at=<snapshot>, q=<search words>, over=<source page number>."""
+    store, _ = store_dir()
+    rm = store / doc / f"{page_id}.rm"
+    snapshot = query.get("at", [""])[0]
+    if snapshot and SNAPSHOT.fullmatch(snapshot):
+        rm = history.files_at(doc, snapshot).get(f"{doc}/{page_id}.rm", Path("missing"))
+    try:
+        page = _page(str(rm), rm.stat().st_mtime) if rm.exists() else scene.Page()
+    except Exception:  # a page we cannot parse should not break the view
+        page = scene.Page()
+    words = query.get("q", [""])[0].lower().split()
+    boxes = []
+    if words and not snapshot:
+        boxes = [h["boxes"] for h in ocr.search(" ".join(words)) if h["doc"] == doc and h["page"] == page_id]
+        boxes = [tuple(b) for group in boxes for b in group]
+    over = query.get("over", [""])[0]
+    pdf = store / f"{doc}.pdf"
+    if over.isdigit() and pdf.exists():
+        # Drawn on top of a rendered original page: no paper, framed to that page.
+        width, height = _source_size(str(pdf), pdf.stat().st_mtime, int(over))
+        scale, x0 = export.source_fit(width, height)
+        framed = scene.Page(page.strokes, page.text, -x0 / scale, 0.0, (width - x0) / scale, height / scale)
+        return render.svg(framed, background=False, highlights=boxes).encode("utf-8")
+    return render.svg(page, highlights=boxes).encode("utf-8")
+
+
+def search_json(query: str) -> dict:
+    store, _ = store_dir()
+    items = library.load(store)
+    hits = []
+    for hit in ocr.search(query):
+        item = items.get(hit["doc"])
+        if item and hit["page"] in item.page_ids:
+            hits.append(
+                {
+                    "doc": item.id,
+                    "name": item.name,
+                    "page": hit["page"],
+                    "number": item.page_ids.index(hit["page"]) + 1,
+                    "snippet": hit["snippet"],
+                    "trashed": item.trashed,
+                }
+            )
+    return {"hits": hits}
+
+
+def sync(wait: bool = True) -> dict:
+    host = require_tablet()
+    if not _sync_lock.acquire(blocking=wait):
+        raise UserError("A sync is already running.")
+    try:
+        mirror = tablet.default_mirror()
+        if mirror.exists():
+            # Record what the mirror holds before files removed on the tablet are dropped from it.
+            history.record(mirror, tablet.local_hashes(mirror))
+        result, report = workflow.sync(host, prune=True)
     except RuntimeError as exc:
-        return {"ok": False, "error": "failed", "detail": str(exc)}
+        raise UserError(f"Sync failed: {exc}") from exc
     finally:
         _sync_lock.release()
-    config = load_config()
-    config["last_sync"] = datetime.now(timezone.utc).isoformat()
-    save_config(config)
-    return {"ok": True, "via": via, "fetched": len(result.fetched), "unchanged": result.unchanged}
+    return {"ok": True, "fetched": len(result.fetched), "removed": len(result.stale), **report}
+
+
+def _auto_sync_loop() -> None:
+    while True:
+        time.sleep(AUTO_SYNC_SECONDS)
+        try:
+            if workflow.load_config().get("auto_sync") and tablet.is_set_up() and workflow.find_tablet()[0]:
+                sync(wait=False)
+        except Exception:  # background sync must never take the server down
+            pass
+
+
+def _index_existing() -> None:
+    store, source = store_dir()
+    if source == "mirror":
+        try:
+            ocr.update_index(store, tablet.local_hashes(store))
+        except Exception:
+            pass
+
+
+def _text(body: dict, key: str, limit: int = 200) -> str:
+    value = body.get(key, "")
+    if not isinstance(value, str):
+        raise UserError(f"{key} must be text.")
+    value = value.strip()
+    if not value or len(value) > limit:
+        raise UserError("That name is empty or too long.")
+    return value
+
+
+def _id(body: dict, key: str, allow: tuple[str, ...] = ()) -> str:
+    value = body.get(key, "")
+    if not isinstance(value, str):
+        raise UserError("Unknown document.")
+    if value not in allow and not re.fullmatch(UUID, value):
+        raise UserError("Unknown document.")
+    return value
+
+
+def change(action: str, body: dict, raw: bytes = b"", query: dict | None = None) -> dict:
+    """Operations that write to the tablet. Each ends with a sync so the UI is current."""
+    host = require_tablet()
+    query = query or {}
+    try:
+        if action == "upload":
+            name = query.get("name", [""])[0].strip()
+            suffix = Path(name).suffix.lower()
+            if suffix not in tablet.UPLOAD_TYPES:
+                raise UserError("Only PDF and EPUB files can be sent to the tablet.")
+            if not raw:
+                raise UserError("That file is empty.")
+            parent = query.get("parent", [""])[0]
+            tablet.upload(host, Path(name).stem[:200], raw, tablet.UPLOAD_TYPES[suffix], _id({"p": parent}, "p", ("",)))
+        elif action == "send-url":
+            title, data = generate.web_page_pdf(str(body.get("url", "")).strip())
+            tablet.upload(host, title, data, "pdf", _id(body, "parent", ("",)))
+        elif action == "agenda":
+            today = date.today()
+            source = workflow.load_config().get("calendar")
+            events = generate.calendar_events(source, today) if source else None
+            folder = tablet.find_folder(host, "Agenda") or tablet.new_folder(host, "Agenda", restart=False)
+            tablet.upload(host, f"Agenda {today.isoformat()}", generate.agenda_pdf(today, events), "pdf", folder)
+        elif action == "folder":
+            tablet.new_folder(host, _text(body, "name"), _id(body, "parent", ("",)))
+        elif action == "rename":
+            tablet.rename(host, _id(body, "id"), _text(body, "name"))
+        elif action == "move":
+            target, doc = _id(body, "parent", ("",)), _id(body, "id")
+            items = library.load(store_dir()[0])
+            walker = target
+            while walker in items:  # a folder cannot be moved into itself or its own contents
+                if walker == doc:
+                    raise UserError("A folder can't be moved inside itself.")
+                walker = items[walker].parent
+            tablet.move(host, doc, target)
+        elif action == "trash":
+            tablet.trash(host, _id(body, "id"))
+        elif action == "restore":
+            doc, snapshot = _id(body, "id"), str(body.get("snapshot", ""))
+            if not SNAPSHOT.fullmatch(snapshot):
+                raise UserError("Unknown version.")
+            files = {path: blob.read_bytes() for path, blob in history.files_at(doc, snapshot).items()}
+            meta = json.loads(files[f"{doc}.metadata"])
+            stamp = f"{snapshot[:4]}-{snapshot[4:6]}-{snapshot[6:8]} {snapshot[9:11]}:{snapshot[11:13]}"
+            tablet.add_copy(host, doc, files, f"{meta.get('visibleName', 'Document')} (restored {stamp})")
+        else:
+            raise UserError("Unknown action.")
+    except (ValueError, RuntimeError, KeyError, OSError) as exc:
+        raise UserError(str(exc)) from exc
+    time.sleep(2)  # give the tablet's app a moment to come back before reading its files
+    return sync()
 
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args) -> None:  # keep the terminal quiet
         pass
 
-    def _send(self, body: bytes, content_type: str, code: int = 200, cache: bool = False) -> None:
+    def _send(self, body: bytes, content_type: str, code: int = 200, cache: bool = False, download: str = "") -> None:
         self.send_response(code)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "private, max-age=30" if cache else "no-store")
+        self.send_header("Cache-Control", "private, max-age=20" if cache else "no-store")
+        if download:
+            safe = export.safe_name(download).encode("ascii", "replace").decode("ascii")
+            self.send_header("Content-Disposition", f'attachment; filename="{safe}"')
         self.end_headers()
         self.wfile.write(body)
 
@@ -161,65 +320,116 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if not self._local_only():
             return
-        path = urlparse(self.path).path
+        url = urlparse(self.path)
+        path, query = url.path, parse_qs(url.query)
         store, _ = store_dir()
+        match = {name: route.match(path) for name, route in ROUTES.items()}
         if path == "/":
             self._send(UI_FILE.read_bytes(), "text/html; charset=utf-8")
         elif path == "/api/library":
             self._json(library_json())
         elif path == "/api/status":
             self._json(status())
-        elif m := PAGE_ROUTE.match(path):
-            rm = store / m[1] / f"{m[2]}.rm"
-            if rm.exists():
-                try:
-                    body = _rendered(str(rm), rm.stat().st_mtime)
-                except Exception:  # a page we cannot parse should not break the grid
-                    body = render.blank_svg().encode("utf-8")
+        elif path == "/api/search":
+            self._json(search_json(query.get("q", [""])[0]))
+        elif m := match["page"]:
+            self._send(page_svg(m[1], m[2], query), "image/svg+xml", cache=True)
+        elif m := match["history"]:
+            self._json({"versions": history.versions(m[1])})
+        elif m := match["text"]:
+            item = library.load(store).get(m[1])
+            if item is None or item.is_folder:
+                self._json({"error": "not found"}, 404)
+            elif m[2] == "json":
+                self._json({"pages": ocr.document_text(item), "available": ocr.available()})
             else:
-                body = render.blank_svg().encode("utf-8")
-            self._send(body, "image/svg+xml", cache=True)
-        elif m := THUMB_ROUTE.match(path):
+                body = export.text(item, markdown_headings=m[2] == "md").encode("utf-8")
+                self._send(body, "text/plain; charset=utf-8", download=f"{item.name}.{m[2]}")
+        elif m := match["original"]:
+            original = store / f"{m[1]}.{m[2]}"
+            item = library.load(store).get(m[1])
+            if not item or not original.exists():
+                self._json({"error": "not found"}, 404)
+            else:
+                mime = "application/epub+zip" if m[2] == "epub" else "application/pdf"
+                self._send(original.read_bytes(), mime, download=f"{item.name}.{m[2]}")
+        elif m := match["thumb"]:
             thumbs = sorted((store / f"{m[1]}.thumbnails").glob("*.png"))
             if thumbs:
                 self._send(thumbs[0].read_bytes(), "image/png", cache=True)
             else:
                 self._json({"error": "not found"}, 404)
-        elif m := PDF_ROUTE.match(path):
+        elif (m := match["pdf"]) and (store / f"{m[1]}.pdf").exists():
+            self._send((store / f"{m[1]}.pdf").read_bytes(), "application/pdf", cache=True)
+        elif (m := match["source"]) and (store / f"{m[1]}.pdf").exists():
             pdf = store / f"{m[1]}.pdf"
-            if pdf.exists():
-                self._send(pdf.read_bytes(), "application/pdf", cache=True)
-            else:
+            try:
+                self._send(_source_png(str(pdf), pdf.stat().st_mtime, int(m[2])), "image/png", cache=True)
+            except Exception:
                 self._json({"error": "not found"}, 404)
+        elif m := match["export"]:
+            item = library.load(store).get(m[1])
+            if item is None or item.is_folder or item.file_type == "epub":
+                self._json({"error": "not found"}, 404)
+            else:
+                self._send(export.pdf(item), "application/pdf", download=f"{item.name}.pdf")
         else:
             self._json({"error": "not found"}, 404)
 
     def do_POST(self) -> None:
         if not self._local_only():
             return
-        length = int(self.headers.get("Content-Length") or 0)
         try:
-            body = json.loads(self.rfile.read(length) or b"{}")
+            length = int(self.headers.get("Content-Length") or 0)
+            if length < 0:
+                raise ValueError
         except ValueError:
-            body = {}
-        path = urlparse(self.path).path
-        if path == "/api/sync":
-            self._json(sync())
-        elif path == "/api/config":
-            host = str(body.get("wifi_host", "")).strip()
-            if host and not re.fullmatch(r"[A-Za-z0-9.\-]{1,253}", host):
-                self._json({"ok": False, "error": "invalid address"}, 400)
+            self._json({"ok": False, "error": "Invalid request size."}, 400)
+            return
+        if length > MAX_UPLOAD:
+            self._json({"ok": False, "error": "That file is too large."}, 413)
+            return
+        raw = self.rfile.read(length)
+        url = urlparse(self.path)
+        action = url.path.removeprefix("/api/")
+        body: dict = {}
+        if action != "upload":
+            try:
+                body = json.loads(raw or b"{}")
+            except ValueError:
+                self._json({"ok": False, "error": "Invalid JSON request."}, 400)
                 return
-            config = load_config()
-            config["wifi_host"] = host
-            save_config(config)
-            self._json({"ok": True})
-        else:
-            self._json({"error": "not found"}, 404)
+            if not isinstance(body, dict):
+                self._json({"ok": False, "error": "Request must be a JSON object."}, 400)
+                return
+        try:
+            if action == "sync":
+                self._json(sync())
+            elif action == "config":
+                changes = {}
+                if "wifi_host" in body:
+                    if not isinstance(body["wifi_host"], str):
+                        raise UserError("Wi-Fi address must be text.")
+                    host = body["wifi_host"].strip()
+                    if host and not re.fullmatch(r"[A-Za-z0-9.\-]{1,253}", host):
+                        raise UserError("That address doesn't look right.")
+                    changes["wifi_host"] = host
+                if "auto_sync" in body:
+                    if not isinstance(body["auto_sync"], bool):
+                        raise UserError("Automatic sync must be true or false.")
+                    changes["auto_sync"] = body["auto_sync"]
+                workflow.update_config(**changes)
+                self._json({"ok": True})
+            else:
+                self._json(change(action, body, raw, parse_qs(url.query)))
+        except UserError as exc:
+            self._json({"ok": False, "error": str(exc)})
 
 
 def serve(port: int = PORT, open_browser: bool = True) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    threading.Thread(target=_index_existing, daemon=True).start()
+    threading.Thread(target=_auto_sync_loop, daemon=True).start()
     url = f"http://127.0.0.1:{port}/"
     print(f"openmarker is running at {url}  (Ctrl+C to stop)")
     if open_browser:

@@ -61,7 +61,7 @@
   .crumbs button { border: 0; background: none; padding: 0; font: inherit; color: var(--muted); }
   .crumbs button:hover { color: var(--ink); }
   .crumbs .sep { color: var(--line); margin: 0 8px; }
-  .search { padding: 8px 12px; width: 240px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  .search { padding: 8px 12px; width: 260px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 26px 22px; }
   .card { border: 0; background: none; padding: 0; text-align: left; display: block; }
   .thumb { aspect-ratio: 3 / 4; background: var(--page); border-radius: 6px; box-shadow: var(--shadow); overflow: hidden; display: grid; place-items: center; transition: transform .15s ease, box-shadow .15s ease; }
@@ -81,8 +81,9 @@
   .viewer-bar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 14px; padding: 12px 22px; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
   .viewer-bar h2 { margin: 0; font: 600 19px var(--serif); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .viewer-bar .meta { color: var(--muted); font-size: 13px; }
-  .pill { padding: 6px 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); text-decoration: none; color: inherit; font-size: 13.5px; }
-  .pages { max-width: 900px; margin: 0 auto; padding: 28px 22px 80px; display: grid; gap: 26px; }
+  .pill { padding: 6px 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--paper); text-decoration: none; color: inherit; font-size: 13.5px; white-space: nowrap; }
+  .pill:disabled { opacity: .5; cursor: default; }
+  .pages { max-width: 900px; width: 100%; margin: 0 auto; padding: 28px 22px 80px; display: grid; gap: 26px; }
   .pages figure { margin: 0; }
   .pages img { width: 100%; display: block; border-radius: 4px; box-shadow: var(--shadow); background: var(--page); }
   .pages figcaption { display: flex; justify-content: space-between; color: var(--muted); font-size: 12.5px; margin-top: 7px; }
@@ -90,21 +91,119 @@
   .pages iframe { width: 100%; height: 82vh; border: 0; border-radius: 4px; box-shadow: var(--shadow); background: var(--page); }
   .pages .note { color: var(--muted); font-size: 13.5px; }
 
-  .toast { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 20px); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 999px; opacity: 0; transition: .2s ease; pointer-events: none; font-size: 14px; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .pill { cursor: pointer; }
+  .pill.accent { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+  .danger { color: var(--accent); }
+  .menu { position: relative; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; min-width: 210px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); display: none; }
+  .menu.open .menu-list { display: block; }
+  .menu-list button { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; background: none; border-radius: 6px; }
+  .menu-list button:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  .card { position: relative; }
+  .card .card { width: 100%; }
+  .more { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); opacity: 0; line-height: 1; font-weight: 700; }
+  .card:hover .more, .more:focus-visible { opacity: 1; }
+  .section { grid-column: 1 / -1; font: 600 13px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 8px; }
+  .snippet { font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+  .drop main { outline: 3px dashed var(--accent); outline-offset: -14px; }
+  .stack { position: relative; border-radius: 4px; box-shadow: var(--shadow); overflow: hidden; background: #fff; }
+  .pages .stack img { box-shadow: none; border-radius: 0; background: none; }
+  .pages .stack img + img { position: absolute; inset: 0; height: 100%; }
+  .viewer-body { display: grid; grid-template-columns: 1fr; }
+  .text-bar { display: none; gap: 8px; align-items: center; justify-content: flex-end; }
+  .text-mode .text-bar { display: flex; }
+  .text-bar span { margin-right: auto; color: var(--muted); font-size: 13.5px; }
+  .pages.text-mode { max-width: 1320px; }
+  .text-mode figure { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 24px; align-items: start; }
+  .text-mode figcaption { grid-column: 1; }
+  .ptext { display: none; grid-column: 2; grid-row: 1; white-space: pre-wrap; font: 16px/1.6 var(--serif); padding: 18px 20px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-height: 120px; user-select: text; }
+  .ptext:empty::before { content: "No text found on this page."; color: var(--muted); font-style: italic; }
+  .text-mode .ptext { display: block; }
+  @media (max-width: 900px) { .text-mode figure { grid-template-columns: 1fr; } .ptext { grid-column: 1; grid-row: auto; } }
+  .viewer-body.with-history { grid-template-columns: 1fr 280px; }
+  .history { display: none; border-left: 1px solid var(--line); padding: 22px 18px; position: sticky; top: 58px; align-self: start; max-height: calc(100vh - 58px); overflow: auto; }
+  .with-history .history { display: block; }
+  .history h3 { margin: 0 0 4px; font: 600 17px var(--serif); }
+  .history p { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; }
+  .version { display: block; width: 100%; text-align: left; padding: 9px 11px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  .version[aria-current="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+  .version small { display: block; color: var(--muted); }
+  dialog.sheet { width: min(420px, 92vw); height: auto; border: 1px solid var(--line); border-radius: 14px; padding: 22px; background: var(--surface); box-shadow: var(--shadow); }
+  dialog.sheet::backdrop { background: rgba(20, 16, 10, .45); }
+  .sheet h3 { margin: 0 0 14px; font: 600 19px var(--serif); }
+  .sheet input, .sheet select { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+  .sheet p { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; }
+  .sheet .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .busy { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; background: color-mix(in srgb, var(--paper) 78%, transparent); font: 600 18px var(--serif); }
+  .busy.on { display: grid; }
+  .toast { position: fixed; z-index: 60; left: 50%; bottom: 26px; transform: translate(-50%, 20px); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 999px; opacity: 0; transition: .2s ease; pointer-events: none; font-size: 14px; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   @media (max-width: 720px) { body { grid-template-columns: 1fr; } aside { display: none; } main { padding: 18px; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+  #nav-toggle { display: none; }
+  /* Shared controls and responsive library/viewer layouts. */
+  [hidden] { display: none !important; }
+  select { font: inherit; color: inherit; }
+  button, .pill { min-height: 40px; }
+  button:disabled { cursor: not-allowed; }
+  button:hover:not(:disabled), a.pill:hover { filter: brightness(.96); }
+  .actions { flex-wrap: wrap; min-width: 0; }
+  .search { width: clamp(180px, 22vw, 280px); }
+  .crumbs { overflow-wrap: anywhere; }
+  .nav-item span:not(.count) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .empty-state { grid-column: 1 / -1; }
+  .more { opacity: 1; width: 40px; height: 40px; }
+  .card:focus-within .thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .viewer-bar { flex-wrap: wrap; gap: 8px; }
+  .viewer-bar h2 { min-width: 120px; }
+  .viewer-bar .meta { flex-basis: 100%; order: 2; }
+  .viewer-body, .pages { min-width: 0; }
+  .text-bar { flex-wrap: wrap; }
+  .toast { max-width: calc(100vw - 32px); border-radius: 10px; width: max-content; }
+  .sheet { max-height: calc(100dvh - 32px); overflow: auto; }
+  .sheet input:invalid { box-shadow: none; }
+  @media (max-width: 1100px) { header { align-items: flex-start; } .actions { flex-basis: 100%; } .search { flex: 1; } }
+  @media (max-width: 720px) {
+    html, body { height: auto; min-height: 100%; }
+    body { display: block; }
+    aside { display: flex; border-right: 0; border-bottom: 1px solid var(--line); }
+    .brand { padding: 14px 18px; display: flex; align-items: center; }
+    #nav-toggle { display: block; margin-left: auto; font: 13px var(--sans); }
+    aside:not(.expanded) nav, aside:not(.expanded) .device { display: none; }
+    nav { max-height: 180px; padding: 0 8px 8px; }
+    .device { padding: 12px 18px; }
+    .device small { margin-bottom: 8px; }
+    .device .btn { width: auto; min-width: 120px; }
+    main { padding: 22px 18px 40px; overflow: visible; }
+    header { gap: 14px; }
+    .crumbs { font-size: 24px; min-width: 0; }
+    .actions { gap: 8px; width: 100%; }
+    .search { width: 100%; flex: 1 0 100%; }
+    .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 14px; }
+    .viewer-bar { padding: 12px; }
+    .viewer-bar h2 { order: -1; flex-basis: 100%; }
+    .viewer-body.with-history { grid-template-columns: minmax(0, 1fr); }
+    .with-history .history { grid-row: 1; position: static; max-height: 260px; border-left: 0; border-bottom: 1px solid var(--line); }
+    .pages { padding: 18px 12px 40px; }
+    .menu-list { min-width: 190px; }
+  }
+
 </style>
 </head>
 <body>
-<aside>
-  <div class="brand">open<span>marker</span></div>
+<aside id="sidebar">
+  <div class="brand">open<span>marker</span><button id="nav-toggle" class="pill" aria-expanded="false" aria-controls="nav device-panel">Library &amp; tablet</button></div>
   <nav id="nav" aria-label="Folders"></nav>
-  <div class="device">
+  <div class="device" id="device-panel">
     <div class="device-row"><span class="dot" id="dot"></span><span id="conn">Looking for tablet…</span></div>
     <small id="last">&nbsp;</small>
     <button class="btn primary" id="sync" disabled>Sync now</button>
     <div class="notice" id="notice" hidden></div>
+    <label class="check"><input type="checkbox" id="auto"> Sync automatically</label>
     <button class="linkish" id="wifi-toggle">Wi-Fi address</button>
     <form class="wifi" id="wifi">
       <input id="wifi-host" placeholder="e.g. 192.168.1.50" aria-label="Tablet Wi-Fi address" autocomplete="off">
@@ -116,31 +215,75 @@
 <main>
   <header>
     <div class="crumbs" id="crumbs"></div>
-    <input class="search" id="search" type="search" placeholder="Search by name" aria-label="Search by name">
+    <div class="actions">
+      <input class="search" id="search" type="search" placeholder="Search names and handwriting" aria-label="Search names and handwriting">
+      <button class="pill" id="new-folder">New folder</button>
+      <div class="menu" id="send-menu">
+        <button class="pill accent" id="send" aria-haspopup="true">Send to tablet</button>
+        <div class="menu-list">
+          <button id="send-file">PDF or EPUB file…</button>
+          <button id="send-url">Web page…</button>
+          <button id="send-agenda">Today's agenda page</button>
+        </div>
+      </div>
+      <input type="file" id="file" accept=".pdf,.epub" multiple hidden>
+    </div>
   </header>
   <div class="source" id="source"></div>
-  <div class="grid" id="grid"></div>
+  <div class="grid" id="grid" aria-label="Library items"></div>
 </main>
 
-<dialog id="viewer">
+<dialog id="viewer" aria-labelledby="v-title">
   <div class="viewer-bar">
     <button class="pill" id="close">← Library</button>
     <h2 id="v-title"></h2>
     <span class="meta" id="v-meta"></span>
-    <a class="pill" id="v-pdf" hidden target="_blank" rel="noopener">Open PDF</a>
+    <a class="pill" id="v-export">Export PDF</a>
+    <button class="pill" id="v-text" aria-pressed="false">Convert to text</button>
+    <button class="pill" id="v-history">History</button>
+    <div class="menu" id="v-menu">
+      <button class="pill" id="v-more" aria-haspopup="true" aria-label="More actions">⋯</button>
+      <div class="menu-list">
+        <button id="v-rename">Rename…</button>
+        <button id="v-move">Move…</button>
+        <button id="v-trash" class="danger">Move to trash</button>
+      </div>
+    </div>
   </div>
-  <div class="pages" id="pages"></div>
+  <div class="viewer-body" id="v-body">
+    <div class="pages" id="pages"></div>
+    <div class="history">
+      <h3>History</h3>
+      <p>A version is kept each time a sync finds changes.</p>
+      <div id="versions"></div>
+      <button class="btn" id="restore" hidden>Restore as a copy</button>
+    </div>
+  </div>
 </dialog>
+<dialog class="sheet" id="sheet" aria-labelledby="sheet-title" aria-describedby="sheet-text">
+  <form method="dialog" id="sheet-form">
+    <h3 id="sheet-title"></h3>
+    <p id="sheet-text" hidden></p>
+    <input id="sheet-input" autocomplete="off" hidden>
+    <select id="sheet-select" hidden></select>
+    <div class="row">
+      <button class="pill" value="cancel" formnovalidate>Cancel</button>
+      <button class="pill accent" value="ok" id="sheet-ok">OK</button>
+    </div>
+  </form>
+</dialog>
+<div class="busy" id="busy" role="status" aria-live="polite">Updating the tablet…</div>
 <div class="toast" id="toast" role="status"></div>
 
 <script>
 const $ = id => document.getElementById(id);
+$("nav-toggle").onclick = () => { const open = $("sidebar").classList.toggle("expanded"); $("nav-toggle").setAttribute("aria-expanded", String(open)); };
 const ICON = {
   folder: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v9.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></svg>',
   home: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6M9 14h6"/></svg>',
   trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
 };
-const state = { items: [], byId: new Map(), folder: "", query: "", status: null };
+const state = { items: [], byId: new Map(), folder: "", query: "", status: null, hits: [], doc: null, version: "" };
 
 const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -149,8 +292,61 @@ const el = (tag, props = {}, ...children) => {
 };
 const api = async (path, body) => {
   const res = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  return res.json();
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "The app could not complete that request.");
+  return data;
 };
+// Run something that changes the tablet: blocks the page, reports the outcome, reloads.
+async function act(message, request, done) {
+  $("busy").textContent = message;
+  $("busy").classList.add("on");
+  let result;
+  try { result = await request(); } catch { result = { ok: false, error: "Something went wrong talking to the app." }; }
+  $("busy").classList.remove("on");
+  if (result.ok) { toast(done); await loadLibrary(); } else toast(result.error || "That didn't work.");
+  loadStatus();
+  return result.ok;
+}
+// A small modal: resolves to the entered or selected value, true for a plain confirm, or null if cancelled.
+function ask({ title, text, value, options, ok = "OK" }) {
+  const sheet = $("sheet"), input = $("sheet-input"), select = $("sheet-select");
+  $("sheet-title").textContent = title;
+  $("sheet-text").hidden = !text; $("sheet-text").textContent = text || "";
+  input.hidden = value === undefined; input.value = value || ""; input.required = value !== undefined; input.maxLength = title === "Send a web page" ? 2048 : 200;
+  input.setAttribute("aria-label", title); select.setAttribute("aria-label", title);
+  select.hidden = !options;
+  if (options) select.replaceChildren(...options.map(([id, label]) => el("option", { value: id, textContent: label })));
+  $("sheet-ok").textContent = ok;
+  sheet.returnValue = "cancel";
+  sheet.showModal();
+  if (!input.hidden) input.select();
+  return new Promise(resolve => sheet.addEventListener("close", () => {
+    if (sheet.returnValue !== "ok") return resolve(null);
+    resolve(options ? select.value : value !== undefined ? input.value.trim() : true);
+  }, { once: true }));
+}
+const folderOptions = exclude => {
+  const out = [["", "My files"]];
+  const walk = (parent, depth) => sorted(children(parent)).filter(i => i.folder && i.id !== exclude).forEach(f => {
+    out.push([f.id, `${"\u2003".repeat(depth)}${f.name}`]);
+    walk(f.id, depth + 1);
+  });
+  walk("", 1);
+  return out;
+};
+const rename = async item => {
+  const name = await ask({ title: `Rename “${item.name}”`, value: item.name, ok: "Rename" });
+  if (name && name !== item.name) return act("Renaming on the tablet…", () => api("/api/rename", { id: item.id, name }), "Renamed");
+};
+const move = async item => {
+  const parent = await ask({ title: `Move “${item.name}” to`, options: folderOptions(item.id), ok: "Move" });
+  if (parent !== null && parent !== item.parent) return act("Moving on the tablet…", () => api("/api/move", { id: item.id, parent }), "Moved");
+};
+const trash = async item => {
+  const sure = await ask({ title: `Move “${item.name}” to trash?`, text: "It stays in the tablet's trash until you empty it there.", ok: "Move to trash" });
+  if (sure) return act("Updating the tablet…", () => api("/api/trash", { id: item.id }), "Moved to trash");
+};
+const currentFolder = () => state.byId.get(state.folder)?.folder ? state.folder : "";
 const toast = message => {
   $("toast").textContent = message;
   $("toast").classList.add("show");
@@ -158,12 +354,21 @@ const toast = message => {
   toast.timer = setTimeout(() => $("toast").classList.remove("show"), 3200);
 };
 const ago = iso => {
-  if (!iso) return "";
+  if (!iso || !Number.isFinite(Date.parse(iso))) return "date unknown";
   const mins = Math.round((Date.now() - new Date(iso)) / 60000);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins} min ago`;
   if (mins < 1440) return `${Math.round(mins / 60)} h ago`;
   return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+};
+const isTrashed = item => {
+  const seen = new Set();
+  while (item) {
+    if (item.parent === "trash") return true;
+    if (seen.has(item.id)) break;
+    seen.add(item.id); item = state.byId.get(item.parent);
+  }
+  return false;
 };
 const children = parent => state.items.filter(i => i.parent === parent);
 const sorted = list => [...list].sort((a, b) => (b.folder - a.folder) || a.name.localeCompare(b.name, undefined, { numeric: true }));
@@ -181,7 +386,9 @@ function renderNav() {
   };
   const docCount = id => children(id).filter(i => !i.folder).length;
   add("", "My files", ICON.home, 0, docCount(""));
-  const walk = (parent, depth) => sorted(children(parent)).filter(i => i.folder).forEach(f => {
+  const seen = new Set();
+  const walk = (parent, depth) => sorted(children(parent)).filter(i => i.folder && !seen.has(i.id)).forEach(f => {
+    seen.add(f.id);
     add(f.id, f.name, ICON.folder, depth, docCount(f.id));
     walk(f.id, depth + 1);
   });
@@ -195,7 +402,7 @@ function renderCrumbs() {
   crumbs.replaceChildren();
   if (state.query) { crumbs.textContent = `Results for “${state.query}”`; return; }
   const trail = [];
-  for (let id = state.folder; id && state.byId.has(id); id = state.byId.get(id).parent) trail.unshift(state.byId.get(id));
+  for (let id = state.folder; id && state.byId.has(id) && !trail.some(i => i.id === id); id = state.byId.get(id).parent) trail.unshift(state.byId.get(id));
   const rootLabel = state.folder === "trash" || trail[0]?.parent === "trash" ? ["trash", "Trash"] : ["", "My files"];
   const parts = [rootLabel, ...trail.map(f => [f.id, f.name])];
   parts.forEach(([id, name], index) => {
@@ -217,32 +424,56 @@ function card(item) {
   }
   const detail = item.folder
     ? `${children(item.id).length} item${children(item.id).length === 1 ? "" : "s"}`
-    : `${item.pages.length} page${item.pages.length === 1 ? "" : "s"} · ${ago(item.modified)}`;
-  return el("button", { className: "card", onclick: () => item.folder ? go(item.id) : openDoc(item) },
+    : `${item.pages.length || "–"} page${item.pages.length === 1 ? "" : "s"} · ${ago(item.modified)}`;
+  const open = el("button", { className: "card", onclick: () => item.folder ? go(item.id) : openDoc(item) },
     thumb, el("h3", { textContent: item.name, title: item.name }), el("p", { textContent: detail }));
+  if (!item.folder || item.parent === "trash") return open;
+  // Folders get their actions here; documents have them in the viewer.
+  const more = el("button", { className: "more", textContent: "⋯", title: "Folder actions", onclick: async () => {
+    const choice = await ask({ title: item.name, options: [["rename", "Rename…"], ["move", "Move…"], ["trash", "Move to trash"]], ok: "Continue" });
+    if (choice) ({ rename, move, trash })[choice](item);
+  } });
+  more.setAttribute("aria-label", `Actions for ${item.name}`);
+  return el("div", { className: "card" }, open, more);
+}
+function hitCard(hit) {
+  const src = `/api/page/${hit.doc}/${hit.page}.svg?q=${encodeURIComponent(state.query)}`;
+  const thumb = el("div", { className: "thumb" }, el("img", { src, alt: "", loading: "lazy" }));
+  return el("button", { className: "card", onclick: () => { location.hash = `doc/${hit.doc}/${hit.page}`; } },
+    thumb, el("h3", { textContent: `${hit.name} · page ${hit.number}`, title: hit.name }), el("p", { className: "snippet", textContent: hit.snippet }));
 }
 
 function renderGrid() {
   const grid = $("grid");
   const query = state.query.toLowerCase();
-  const list = query ? state.items.filter(i => i.name.toLowerCase().includes(query)) : children(state.folder);
+  const list = query ? state.items.filter(i => !isTrashed(i) && i.name.toLowerCase().includes(query)) : children(state.folder);
   grid.replaceChildren(...sorted(list).map(card));
+  if (query && state.hits.length) {
+    grid.append(el("div", { className: "section", textContent: "Found in handwriting and text" }), ...state.hits.map(hitCard));
+    grid.style.display = "";
+    return;
+  }
   if (!list.length) grid.append(el("div", { className: "empty-state", textContent: query ? "Nothing matches that search." : "Nothing here yet." }));
   grid.style.display = list.length ? "" : "block";
 }
 
 function go(folder) {
+  $("sidebar").classList.remove("expanded"); $("nav-toggle").setAttribute("aria-expanded", "false");
   state.query = "";
+  state.hits = [];
   $("search").value = "";
   if (location.hash.slice(1) === folder) route(); else location.hash = folder;
 }
 function route() {
-  const hash = decodeURIComponent(location.hash.slice(1));
-  const doc = hash.startsWith("doc/") ? state.byId.get(hash.slice(4)) : null;
+  let hash;
+  try { hash = decodeURIComponent(location.hash.slice(1)); } catch { hash = ""; }
+  const [, docId, pageId] = hash.startsWith("doc/") ? hash.split("/") : [];
+  const doc = docId ? state.byId.get(docId) : null;
   if (doc && !doc.folder) {
-    state.folder = doc.parent;
+    if (!state.query) state.folder = doc.parent;
     renderAll();
-    showDoc(doc);
+    showDoc(doc, pageId);
+    if (pageId === "text") setTextMode(true);  // #doc/<id>/text opens straight into the text view
     return;
   }
   if ($("viewer").open) $("viewer").close();
@@ -252,32 +483,96 @@ function route() {
 const openDoc = item => { location.hash = `doc/${item.id}`; };
 function renderAll() { renderNav(); renderCrumbs(); renderGrid(); }
 
-function showDoc(item) {
+function showDoc(item, focusPage) {
+  if (state.doc !== item.id) { state.version = ""; state.textMode = false; $("v-body").classList.remove("with-history"); }
+  state.doc = item.id;
   $("v-title").textContent = item.name;
   $("v-meta").textContent = `${item.pages.length} page${item.pages.length === 1 ? "" : "s"} · edited ${ago(item.modified)}`;
-  const pdfLink = $("v-pdf");
-  pdfLink.hidden = !item.has_pdf;
-  if (item.has_pdf) pdfLink.href = `/api/pdf/${item.id}.pdf`;
+  $("v-export").hidden = item.type === "epub" && !item.has_original;
+  $("v-export").textContent = item.type === "epub" ? "Download EPUB" : "Export PDF";
+  if (state.version && item.type !== "epub") $("v-export").textContent = "Export current PDF";
+  $("v-export").href = item.type === "epub" ? `/api/original/${item.id}.epub` : `/api/export/${item.id}.pdf`;
+  $("v-text").disabled = !item.pages.length;
+  $("v-menu").hidden = isTrashed(item);
   const pages = $("pages");
-  pages.replaceChildren();
-  const figure = (pageId, number) => {
-    const src = `/api/page/${item.id}/${pageId}.svg`;
-    return el("figure", {},
-      el("img", { src, alt: `Page ${number}`, loading: "lazy" }),
-      el("figcaption", {}, el("span", { textContent: `Page ${number}` }), el("a", { href: src, download: `${item.name} - page ${number}.svg`, textContent: "Download SVG" })));
-  };
-  if (item.type === "notebook") {
-    item.pages.forEach((id, index) => pages.append(figure(id, index + 1)));
-  } else {
-    if (item.inked.length) {
-      pages.append(el("p", { className: "note", textContent: `Your ink on ${item.inked.length} page${item.inked.length === 1 ? "" : "s"}, shown without the document behind it:` }));
-      item.inked.forEach(id => pages.append(figure(id, item.pages.indexOf(id) + 1)));
+  pages.replaceChildren(el("div", { className: "text-bar" },
+    el("span", { id: "text-note", textContent: "Recognising handwriting…" }),
+    el("button", { className: "pill", textContent: "Copy all", onclick: copyText }),
+    el("a", { className: "pill", textContent: "Download .txt", href: `/api/text/${item.id}.txt` }),
+    el("a", { className: "pill", textContent: "Download .md", href: `/api/text/${item.id}.md` })));
+  const at = state.version ? `&at=${state.version}` : "";
+  const extra = at + (state.query ? `&q=${encodeURIComponent(state.query)}` : "");
+  item.pages.forEach((id, index) => {
+    const number = index + 1;
+    const source = item.source_pages[id];
+    const base = `/api/page/${item.id}/${id}.svg`;
+    let view;
+    if (item.has_pdf && source !== undefined) {
+      // The original page as a picture, with the ink drawn over it.
+      view = el("div", { className: "stack" },
+        el("img", { src: `/api/source/${item.id}/${source}.png`, alt: `Page ${number}`, loading: "lazy" }),
+        el("img", { src: `${base}?over=${source}${extra}`, alt: "", loading: "lazy" }));
+    } else {
+      view = el("img", { src: `${base}?v=1${extra}`, alt: `Page ${number}`, loading: "lazy" });
     }
-    if (item.has_pdf) pages.append(el("iframe", { src: `/api/pdf/${item.id}.pdf`, title: item.name }));
-    else pages.append(el("p", { className: "note", textContent: "This document type can't be previewed yet." }));
-  }
-  $("viewer").showModal();
-  $("viewer").scrollTop = 0;
+    pages.append(el("figure", { id: `page-${id}` }, view,
+      el("figcaption", {}, el("span", { textContent: `Page ${number}` }),
+        el("a", { href: `${base}?v=1${at}`, download: `${item.name} - page ${number}.svg`, textContent: "Download ink as SVG" })),
+      el("div", { className: "ptext" })));
+  });
+  setTextMode(state.textMode && !state.version);
+  if (!item.pages.length) pages.append(el("p", { className: "note", textContent: item.type === "epub" ? "EPUB books can't be previewed here yet." : "No pages to show yet. If you just sent this, open it on the tablet once, then sync." }));
+  if (!$("viewer").open) $("viewer").showModal();
+  const target = focusPage && document.getElementById(`page-${focusPage}`);
+  if (target) target.scrollIntoView(); else $("viewer").scrollTop = 0;
+}
+
+// Text view: each page beside its recognised text.
+async function setTextMode(on) {
+  state.textMode = on;
+  $("pages").classList.toggle("text-mode", on);
+  $("v-text").setAttribute("aria-pressed", String(on));
+  $("v-text").textContent = on ? "Hide text" : "Convert to text";
+  if (!on) return;
+  const doc = state.doc;
+  state.text = [];
+  const data = await api(`/api/text/${doc}.json`);
+  if (doc !== state.doc || !state.textMode) return;
+  state.text = data.pages;
+  document.querySelectorAll("#pages .ptext").forEach((slot, index) => { slot.textContent = data.pages[index] || ""; });
+  const found = data.pages.filter(t => t.trim()).length;
+  $("text-note").textContent = !data.available ? "Handwriting recognition needs Windows; only typed text is shown."
+    : found ? "Recognised on this computer. Check it against the page: handwriting recognition makes mistakes."
+    : "No text was recognised in this document.";
+}
+async function copyText() {
+  const text = (state.text || []).map((page, index) => page.trim() ? `Page ${index + 1}\n${page.trim()}` : "").filter(Boolean).join("\n\n");
+  try { await navigator.clipboard.writeText(text); toast("Text copied"); } catch { toast("Couldn't copy. Use Download instead."); }
+}
+
+async function showHistory() {
+  const item = state.byId.get(state.doc);
+  if (state.textMode) setTextMode(false);
+  const open = $("v-body").classList.toggle("with-history");
+  if (!open) { state.version = ""; return showDoc(item); }
+  const { versions } = await api(`/api/history/${item.id}`);
+  if (state.doc !== item.id) return;
+  const list = $("versions");
+  const draw = () => {
+    list.replaceChildren(el("button", { className: "version", textContent: "Current document", onclick: () => { state.version = ""; showDoc(item); draw(); } }));
+    list.firstChild.setAttribute("aria-current", String(!state.version));
+    [...versions].reverse().forEach((version, index) => {
+      
+      const button = el("button", { className: "version", onclick: () => { state.version = version.id; showDoc(item); draw(); } },
+        el("span", { textContent: new Date(version.when).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) }),
+        el("small", { textContent: `${version.changed_pages.length} page${version.changed_pages.length === 1 ? "" : "s"} changed` }));
+      button.setAttribute("aria-current", String(state.version === version.id));
+      list.append(button);
+    });
+    if (!versions.length) list.append(el("p", { textContent: "No versions yet. Sync to start keeping history." }));
+    $("restore").hidden = !state.version;
+  };
+  draw();
 }
 
 async function loadLibrary() {
@@ -296,6 +591,10 @@ async function loadStatus() {
   $("last").textContent = s.last_sync ? `Last synced ${ago(s.last_sync)}` : "Not synced yet";
   $("sync").disabled = !s.connected || !s.set_up || $("sync").dataset.busy === "1";
   if (document.activeElement !== $("wifi-host")) $("wifi-host").value = s.wifi_host;
+  $("auto").checked = s.auto_sync;
+  for (const id of ["send", "new-folder"]) $(id).disabled = !s.connected || !s.set_up;
+  if (s.last_sync && state.lastSync && s.last_sync !== state.lastSync) loadLibrary();  // a background sync finished
+  state.lastSync = s.last_sync;
   const notice = $("notice");
   notice.hidden = s.set_up;
   if (!s.set_up) notice.innerHTML = "One-time step: run <code>python -m openmarker setup</code> in a terminal to authorise this computer.";
@@ -307,10 +606,10 @@ $("sync").onclick = async () => {
   const result = await api("/api/sync", {}).catch(() => ({ ok: false, error: "failed" }));
   button.dataset.busy = ""; button.textContent = "Sync now";
   if (result.ok) {
-    toast(result.fetched ? `Synced over ${result.via}: ${result.fetched} file${result.fetched === 1 ? "" : "s"} updated` : "Already up to date");
+    toast(result.fetched || result.removed ? `Synced: ${result.fetched} file${result.fetched === 1 ? "" : "s"} updated` : "Already up to date");
     await loadLibrary();
   } else {
-    toast({ not_connected: "Tablet not reachable", needs_setup: "Run setup first", busy: "A sync is already running" }[result.error] || "Sync failed");
+    toast(result.error || "Sync failed");
   }
   loadStatus();
 };
@@ -318,10 +617,90 @@ $("wifi-toggle").onclick = () => $("wifi").classList.toggle("open");
 $("wifi").onsubmit = async event => {
   event.preventDefault();
   const result = await api("/api/config", { wifi_host: $("wifi-host").value });
-  toast(result.ok ? "Wi-Fi address saved" : "That address doesn't look right");
+  toast(result.ok ? "Wi-Fi address saved" : result.error);
   loadStatus();
 };
-$("search").oninput = event => { state.query = event.target.value.trim(); renderAll(); };
+let searchTimer;
+$("search").oninput = event => {
+  state.query = event.target.value.trim();
+  state.hits = [];
+  renderAll();
+  clearTimeout(searchTimer);
+  if (state.query.length < 2) return;
+  const asked = state.query;
+  searchTimer = setTimeout(async () => {
+    const { hits } = await api(`/api/search?q=${encodeURIComponent(asked)}`);
+    if (asked === state.query) { state.hits = hits.filter(h => state.byId.has(h.doc) && !isTrashed(state.byId.get(h.doc))); renderGrid(); }
+  }, 180);
+};
+
+// Menus
+document.querySelectorAll(".menu").forEach(menu => {
+  menu.querySelector("button").onclick = event => { event.stopPropagation(); menu.classList.toggle("open"); menu.querySelector("button").setAttribute("aria-expanded", String(menu.classList.contains("open"))); };
+});
+function closeMenus() { document.querySelectorAll(".menu.open").forEach(m => { m.classList.remove("open"); m.querySelector("button").setAttribute("aria-expanded", "false"); }); }
+addEventListener("click", closeMenus);
+addEventListener("keydown", event => { if (event.key === "Escape" && document.querySelector(".menu.open")) { event.preventDefault(); const trigger = document.querySelector(".menu.open > button"); closeMenus(); trigger.focus(); } });
+addEventListener("unhandledrejection", event => { event.preventDefault(); toast(event.reason?.message || "Could not reach the app. Try again."); });
+
+// Sending things to the tablet
+async function sendFiles(files) {
+  const wanted = [...files].filter(f => /\.(pdf|epub)$/i.test(f.name));
+  if (!wanted.length) return toast("Only PDF and EPUB files can be sent.");
+  if (!state.status?.connected || !state.status?.set_up) return toast("Connect and set up the tablet before sending files.");
+  if (wanted.some(f => f.size > 500 * 1024 * 1024 || !f.size)) return toast("Choose non-empty files smaller than 500 MB.");
+  const parent = currentFolder();
+  await act(`Sending ${wanted.length === 1 ? wanted[0].name : `${wanted.length} files`} to the tablet…`, async () => {
+    let last = { ok: true };
+    for (const file of wanted) {
+      last = await (await fetch(`/api/upload?name=${encodeURIComponent(file.name)}&parent=${parent}`, { method: "POST", body: file })).json();
+      if (!last.ok) break;
+    }
+    return last;
+  }, "Sent to the tablet");
+}
+$("send-file").onclick = () => $("file").click();
+$("file").onchange = event => { sendFiles(event.target.files); event.target.value = ""; };
+$("send-url").onclick = async () => {
+  const url = await ask({ title: "Send a web page", text: "The page is saved as a PDF and sent to the current folder.", value: "https://", ok: "Send" });
+  if (url) act("Saving the page and sending it…", () => api("/api/send-url", { url, parent: currentFolder() }), "Sent to the tablet");
+};
+$("send-agenda").onclick = () => act("Making today's page…", () => api("/api/agenda", {}), "Agenda page sent");
+$("new-folder").onclick = async () => {
+  const name = await ask({ title: "New folder", value: "", ok: "Create" });
+  if (name) act("Creating the folder…", () => api("/api/folder", { name, parent: currentFolder() }), "Folder created");
+};
+let dragDepth = 0;
+addEventListener("dragenter", event => { if (event.dataTransfer?.types.includes("Files")) { dragDepth++; document.body.classList.add("drop"); } });
+addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("drop"); } });
+addEventListener("dragover", event => event.preventDefault());
+addEventListener("drop", event => {
+  event.preventDefault();
+  dragDepth = 0;
+  document.body.classList.remove("drop");
+  if (event.dataTransfer?.files.length) sendFiles(event.dataTransfer.files);
+});
+
+// Viewer actions
+const viewed = () => state.byId.get(state.doc);
+$("v-history").onclick = showHistory;
+$("v-text").onclick = () => {
+  if (state.version) { state.version = ""; $("v-body").classList.remove("with-history"); state.textMode = true; return showDoc(viewed()); }
+  setTextMode(!state.textMode);
+};
+$("v-rename").onclick = async () => { if (await rename(viewed())) route(); };
+$("v-move").onclick = () => move(viewed());
+$("v-trash").onclick = async () => { if (await trash(viewed())) $("viewer").close(); };
+$("restore").onclick = async () => {
+  const item = viewed();
+  const sure = await ask({ title: "Restore this version?", text: "It is added to the tablet as a new copy. The current document is not changed.", ok: "Restore as a copy" });
+  if (sure) act("Restoring a copy to the tablet…", () => api("/api/restore", { id: item.id, snapshot: state.version }), "Restored as a copy");
+};
+$("auto").onchange = async event => {
+  const checked = event.target.checked;
+  try { const result = await api("/api/config", { auto_sync: checked }); if (!result.ok) throw new Error(result.error); }
+  catch (error) { $("auto").checked = !checked; toast(error.message); }
+};
 $("close").onclick = () => $("viewer").close();
 $("viewer").addEventListener("close", () => { if (location.hash.startsWith("#doc/")) location.hash = state.folder; });
 addEventListener("hashchange", route);

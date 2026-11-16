@@ -29,6 +29,10 @@ class Item:
     modified: datetime | None
     file_type: str = ""  # notebook | pdf | epub
     page_ids: list[str] = field(default_factory=list)
+    # For PDF-backed documents: page id -> page number in the original file.
+    # Pages inserted on the tablet are absent.
+    source_pages: dict[str, int] = field(default_factory=dict)
+    tags: list[str] = field(default_factory=list)
     store: Path | None = None
 
     @property
@@ -46,40 +50,70 @@ class Item:
 def _timestamp(ms: str | None) -> datetime | None:
     if not ms or ms == "0":
         return None
-    return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc)
+    try:
+        return datetime.fromtimestamp(int(ms) / 1000, tz=timezone.utc)
+    except (ValueError, TypeError, OverflowError, OSError):
+        return None
 
 
-def _page_ids(content: dict) -> list[str]:
+def _pages(content: dict) -> tuple[list[str], dict[str, int]]:
+    """Ordered page ids, and which original-file page each one shows."""
     # formatVersion 2 keeps pages under cPages with CRDT ordering keys;
-    # formatVersion 1 is a plain ordered list.
+    # formatVersion 1 is a plain ordered list with a parallel redirection map.
     if "cPages" in content:
         pages = [p for p in content["cPages"]["pages"] if "deleted" not in p]
         pages.sort(key=lambda p: p["idx"]["value"])
-        return [p["id"] for p in pages]
-    return list(content.get("pages") or [])
+        source = {p["id"]: p["redir"]["value"] for p in pages if "redir" in p and p["redir"]["value"] >= 0}
+        return [p["id"] for p in pages], source
+    ids = list(content.get("pages") or [])
+    redirect = content.get("redirectionPageMap") or []
+    return ids, {page: n for page, n in zip(ids, redirect) if n >= 0}
+
+
+def _tags(content: dict) -> list[str]:
+    names = set()
+    for key in ("tags", "pageTags"):
+        entries = content.get(key)
+        if isinstance(entries, list):
+            for tag in entries:
+                name = tag.get("name") if isinstance(tag, dict) else None
+                if isinstance(name, str) and name.strip():
+                    names.add(name)
+    return sorted(names)
 
 
 def load(store: Path | None = None) -> dict[str, Item]:
     store = Path(store) if store else default_store()
     items: dict[str, Item] = {}
     for meta_path in sorted(store.glob("*.metadata")):
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            continue
+        if not isinstance(meta, dict):
+            continue
         if meta.get("deleted"):
             continue
         content_path = meta_path.with_suffix(".content")
-        content = (
-            json.loads(content_path.read_text(encoding="utf-8"))
-            if content_path.exists()
-            else {}
-        )
+        try:
+            content = json.loads(content_path.read_text(encoding="utf-8")) if content_path.exists() else {}
+            if not isinstance(content, dict):
+                content = {}
+            page_ids, source_pages = _pages(content)
+        except (ValueError, OSError, TypeError, KeyError, AttributeError):
+            content, page_ids, source_pages = {}, [], {}
+        page_ids = list(dict.fromkeys(p for p in page_ids if isinstance(p, str)))
+        source_pages = {p: n for p, n in source_pages.items() if p in page_ids and type(n) is int and n >= 0}
         items[meta_path.stem] = Item(
             id=meta_path.stem,
-            name=meta.get("visibleName", ""),
-            parent=meta.get("parent", ""),
+            name=meta.get("visibleName") if isinstance(meta.get("visibleName"), str) and meta["visibleName"].strip() else "Untitled",
+            parent=meta.get("parent") if isinstance(meta.get("parent"), str) else "",
             is_folder=meta.get("type") == "CollectionType",
             modified=_timestamp(meta.get("lastModified")),
-            file_type=content.get("fileType", ""),
-            page_ids=_page_ids(content),
+            file_type=content.get("fileType") if content.get("fileType") in ("pdf", "epub", "notebook") else "notebook",
+            page_ids=page_ids,
+            source_pages=source_pages,
+            tags=_tags(content),
             store=store,
         )
     return items
