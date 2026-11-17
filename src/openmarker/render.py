@@ -1,6 +1,9 @@
 """Draw a parsed page as SVG."""
 from __future__ import annotations
 
+import io
+import threading
+from functools import lru_cache
 from html import escape
 from pathlib import Path
 
@@ -59,6 +62,73 @@ def svg(page: Page, background: bool = True, highlights: list[tuple[float, float
         f'<g fill="none" stroke-linejoin="round">{"".join(_stroke(s) for s in page.strokes)}</g>'
         "</svg>"
     )
+
+
+def png(page: Page, backdrop: bytes | None = None, width: int = 1240) -> bytes:
+    """The page as a PNG picture, `width` pixels across: ink on white, or over `backdrop` (a PNG of the original page)."""
+    from PIL import Image, ImageColor, ImageDraw, ImageFont
+
+    k = 2 * width / page.width  # drawn at twice the size, then shrunk for smooth lines
+    size = (round(page.width * k), round(page.height * k))
+    if backdrop:
+        canvas = Image.open(io.BytesIO(backdrop)).convert("RGB").resize(size, Image.LANCZOS)
+    else:
+        canvas = Image.new("RGB", size, "white")
+    draw = ImageDraw.Draw(canvas)
+    for line in page.text:
+        font = ImageFont.load_default(size=max(8, line.size * k))
+        draw.text(((line.x - page.left) * k, (line.y - page.top) * k), line.content, font=font, fill="#1b1b1b", anchor="ls")
+    for stroke in page.strokes:
+        points = [((x - page.left) * k, (y - page.top) * k) for x, y, _ in stroke.points]
+        if len(points) == 1:
+            points.append(points[0])
+        thickness = max(1, round(stroke.mean_width * k))
+        if stroke.opacity < 1:  # highlighters: laid over what is beneath
+            layer = Image.new("RGBA", size, (0, 0, 0, 0))
+            colour = ImageColor.getrgb(stroke.color) + (round(255 * stroke.opacity),)
+            ImageDraw.Draw(layer).line(points, fill=colour, width=thickness)
+            canvas.paste(layer, mask=layer)
+        else:
+            draw.line(points, fill=stroke.color, width=thickness, joint="curve")
+    canvas = canvas.resize((width, round(width * page.height / page.width)), Image.LANCZOS)
+    buffer = io.BytesIO()
+    canvas.save(buffer, "PNG", optimize=True)
+    return buffer.getvalue()
+
+
+# The PDF renderer is not safe to use from two threads at once: pages asked
+# for at the same moment would crash the whole program.
+_pdf_lock = threading.Lock()
+
+
+@lru_cache(maxsize=64)
+def pdf_page_png(path: str, mtime: float, number: int) -> bytes:
+    """One page of a PDF file as a PNG picture. `mtime` only keeps the cache honest."""
+    import pypdfium2
+
+    with _pdf_lock:
+        document = pypdfium2.PdfDocument(path)
+        try:
+            page = document[number]
+            width, _ = page.get_size()
+            image = page.render(scale=min(2.0, 1400 / width)).to_pil()
+        finally:
+            document.close()
+    buffer = io.BytesIO()
+    image.save(buffer, "PNG")
+    return buffer.getvalue()
+
+
+@lru_cache(maxsize=64)
+def pdf_page_size(path: str, mtime: float, number: int) -> tuple[float, float]:
+    import pypdfium2
+
+    with _pdf_lock:
+        document = pypdfium2.PdfDocument(path)
+        try:
+            return document[number].get_size()
+        finally:
+            document.close()
 
 
 def page_svg(rm_path: Path, **options) -> str:

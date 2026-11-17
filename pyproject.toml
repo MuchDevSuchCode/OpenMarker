@@ -17,6 +17,8 @@ dependencies = [
     "scikit-image>=0.22",
     # Cutting the subject out of photos with a local segmentation model.
     "rembg[cpu]>=2.0",
+    # The optional AI features (off until switched on in Settings).
+    "anthropic>=1.0",
     # Handwriting recognition uses the recogniser built into Windows.
     "winrt-runtime; sys_platform == 'win32'",
     "winrt-Windows.Foundation; sys_platform == 'win32'",

@@ -124,6 +124,10 @@ def _connect() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS pages ("
         "doc TEXT, page TEXT, hash TEXT, text TEXT, words TEXT, PRIMARY KEY (doc, page))"
     )
+    # `source` is "ai" for text read by the AI transcription, "" for the built-in recogniser.
+    if "source" not in {row[1] for row in db.execute("PRAGMA table_info(pages)")}:
+        db.execute("ALTER TABLE pages ADD COLUMN source TEXT NOT NULL DEFAULT ''")
+    db.execute("CREATE TABLE IF NOT EXISTS answers (doc TEXT, page TEXT, hash TEXT, PRIMARY KEY (doc, page))")
     return db
 
 
@@ -151,7 +155,7 @@ def update_index(store: Path, hashes: dict[str, str]) -> int:
         except Exception:  # an unreadable page must not stop the rest
             text, words = "", []
         db.execute(
-            "INSERT OR REPLACE INTO pages VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO pages (doc, page, hash, text, words, source) VALUES (?, ?, ?, ?, ?, '')",
             (key[0], key[1], digest, text, json.dumps(words)),
         )
         db.commit()
@@ -168,6 +172,49 @@ def stored_text(doc: str, page: str) -> str:
     row = db.execute("SELECT text FROM pages WHERE doc = ? AND page = ?", (doc, page)).fetchone()
     db.close()
     return row[0] if row else ""
+
+
+def text_source(doc: str, page: str, digest: str) -> str | None:
+    """Where the stored text of a page came from ("ai" or ""), or None if the page has changed since."""
+    db = _connect()
+    row = db.execute("SELECT hash, source FROM pages WHERE doc = ? AND page = ?", (doc, page)).fetchone()
+    db.close()
+    return row[1] if row and row[0] == digest else None
+
+
+def store_text(doc: str, page: str, digest: str, text: str) -> None:
+    """Replace a page's text with a better reading. Word positions from the recogniser are kept."""
+    db = _connect()
+    row = db.execute("SELECT hash, words FROM pages WHERE doc = ? AND page = ?", (doc, page)).fetchone()
+    words = row[1] if row and row[0] == digest else "[]"
+    db.execute(
+        "INSERT OR REPLACE INTO pages (doc, page, hash, text, words, source) VALUES (?, ?, ?, ?, ?, 'ai')",
+        (doc, page, digest, text, words),
+    )
+    db.commit()
+    db.close()
+
+
+def all_text() -> list[tuple[str, str, str]]:
+    """(document, page, text) for every indexed page that has text."""
+    db = _connect()
+    rows = db.execute("SELECT doc, page, text FROM pages WHERE text != '' ORDER BY doc, page").fetchall()
+    db.close()
+    return rows
+
+
+def was_answered(doc: str, page: str, digest: str) -> bool:
+    db = _connect()
+    row = db.execute("SELECT hash FROM answers WHERE doc = ? AND page = ?", (doc, page)).fetchone()
+    db.close()
+    return bool(row) and row[0] == digest
+
+
+def mark_answered(doc: str, page: str, digest: str) -> None:
+    db = _connect()
+    db.execute("INSERT OR REPLACE INTO answers VALUES (?, ?, ?)", (doc, page, digest))
+    db.commit()
+    db.close()
 
 
 def document_text(item) -> list[str]:

@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import export, generate, history, images, ink, library, ocr, render, scene, tablet, workflow
+from . import ai, export, generate, history, images, ink, library, ocr, render, scene, tablet, workflow
 
 PORT = 8737
 AUTO_SYNC_SECONDS = 30
@@ -32,9 +32,6 @@ ROUTES = {
 SNAPSHOT = re.compile(r"\d{8}T\d{12}Z")
 UI_FILE = Path(__file__).parent / "static" / "ui.html"
 _sync_lock = threading.Lock()
-# The PDF renderer is not safe to use from two threads at once: pages asked
-# for at the same moment would crash the whole server.
-_pdf_lock = threading.Lock()
 
 
 class UserError(Exception):
@@ -101,6 +98,7 @@ def status() -> dict:
         "source": store_dir()[1],
         "handwriting_search": ocr.available(),
         "subject_cutout": images.subject_available(),
+        "ai": ai.enabled(),
     }
 
 
@@ -116,6 +114,11 @@ def settings_json() -> dict:
         "markdown_dir": config.get("markdown_dir") or "",
         "markdown_tag": config.get("markdown_tag") or "",
         "hooks": len(hooks) if isinstance(hooks, list) else 0,
+        "ai_enabled": bool(config.get("ai_enabled")),
+        "ai_key": ai.key_source(),  # where the key comes from; the key itself is never sent to the browser
+        "ai_model": ai.model(),
+        "ai_models": list(ai.MODELS),
+        "ai_answer_tag": config.get("ai_answer_tag") or "",
         "folder": str(workflow.config_path().parent),
         "handwriting_search": ocr.available(),
         "subject_cutout": images.subject_available(),
@@ -158,7 +161,31 @@ def settings_changes(body: dict) -> dict:
         changes["markdown_dir"] = folder or None
     if "markdown_tag" in body:
         changes["markdown_tag"] = _setting(body, "markdown_tag", "Tag", 100) or None
+    if "ai_enabled" in body:
+        if not isinstance(body["ai_enabled"], bool):
+            raise UserError("AI features must be true or false.")
+        changes["ai_enabled"] = body["ai_enabled"]
+    if "ai_model" in body:
+        if body["ai_model"] not in ai.MODELS:
+            raise UserError("Choose one of the listed models.")
+        changes["ai_model"] = body["ai_model"]
+    if "ai_answer_tag" in body:
+        changes["ai_answer_tag"] = _setting(body, "ai_answer_tag", "Tag", 100) or None
     return changes
+
+
+def api_key_change(body: dict) -> str | None | bool:
+    """The API key a settings request asks to store: a key, None to remove it, False for no change."""
+    if body.get("ai_key_clear") is True:
+        return None
+    if "ai_key" not in body:
+        return False
+    key = _setting(body, "ai_key", "API key", 400)
+    if not key:
+        return False
+    if not re.fullmatch(r"[\x21-\x7e]{20,400}", key):
+        raise UserError("That doesn't look like an API key.")
+    return key
 
 
 def library_json() -> dict:
@@ -192,33 +219,7 @@ def library_json() -> dict:
     return {"source": source, "items": out}
 
 
-@lru_cache(maxsize=64)
-def _source_png(path: str, mtime: float, number: int) -> bytes:
-    import pypdfium2
-
-    with _pdf_lock:
-        document = pypdfium2.PdfDocument(path)
-        try:
-            page = document[number]
-            width, _ = page.get_size()
-            image = page.render(scale=min(2.0, 1400 / width)).to_pil()
-        finally:
-            document.close()
-    buffer = io.BytesIO()
-    image.save(buffer, "PNG")
-    return buffer.getvalue()
-
-
-@lru_cache(maxsize=64)
-def _source_size(path: str, mtime: float, number: int) -> tuple[float, float]:
-    import pypdfium2
-
-    with _pdf_lock:
-        document = pypdfium2.PdfDocument(path)
-        try:
-            return document[number].get_size()
-        finally:
-            document.close()
+_source_png, _source_size = render.pdf_page_png, render.pdf_page_size
 
 
 @lru_cache(maxsize=256)
@@ -283,11 +284,118 @@ def sync(wait: bool = True) -> dict:
             # Record what the mirror holds before files removed on the tablet are dropped from it.
             history.record(mirror, tablet.local_hashes(mirror))
         result, report = workflow.sync(host, prune=True)
+        answers = _answer_tagged(host)
+        if answers.get("answered"):
+            time.sleep(2)  # let the tablet take the new documents in, then fetch them
+            workflow.sync(host, prune=True)
     except RuntimeError as exc:
         raise UserError(f"Sync failed: {exc}") from exc
     finally:
         _sync_lock.release()
-    return {"ok": True, "fetched": len(result.fetched), "removed": len(result.stale), **report}
+    return {"ok": True, "fetched": len(result.fetched), "removed": len(result.stale), **report, **answers}
+
+
+def _answer_tagged(host: str) -> dict:
+    """Reply to pages the user tagged for an answer on the tablet (see ai.answer_tag).
+
+    Each reply is sent as a document next to the one that asked. A page is
+    answered once for what is written on it; change the page and it is
+    answered again. Returns {"answered": how many, "ai_error": what stopped it}.
+    """
+    tag = ai.answer_tag()
+    if not tag:
+        return {}
+    items = library.load(tablet.default_mirror())
+    sent, error, restart = 0, "", False
+    for item, page_id, digest in ai.pending_answers(items, tag):
+        number = item.page_ids.index(page_id) + 1
+        try:
+            reply = ai.answer_page(item, page_id)
+            pdf = generate.text_pdf("Answer", reply, kicker=f"{item.name} · page {number}")
+            parent = item.parent if item.parent in items else ""
+            restart = bool(tablet.upload(host, f"{item.name} – answer p{number}", pdf, "pdf", parent, restart=False)) or restart
+        except ai.AIError as exc:
+            error = str(exc)
+            break
+        except (RuntimeError, OSError, ValueError) as exc:
+            error = f"An answer could not be sent: {exc}"
+            break
+        ocr.mark_answered(item.id, page_id, digest)
+        sent += 1
+    if restart:
+        tablet.restart_app(host)
+    return {"answered": sent, **({"ai_error": error} if error else {})}
+
+
+def ai_action(action: str, body: dict) -> dict:
+    """The AI features (see ai.py). Only the two that end in a change touch the tablet."""
+    store, _ = store_dir()
+    items = library.load(store)
+
+    def document() -> library.Item:
+        item = items.get(_id(body, "id"))
+        if item is None or item.is_folder:
+            raise UserError("Unknown document.")
+        return item
+
+    def words(key: str, limit: int) -> str:
+        value = body.get(key, "")
+        if not isinstance(value, str) or len(value) > limit:
+            raise UserError("That text is too long.")
+        return value.strip()
+
+    try:
+        if action == "ai/transcribe":
+            return {"ok": True, **ai.transcribe(document())}
+        if action == "ai/summary":
+            return {"ok": True, **ai.summarise(document())}
+        if action == "ai/ask":
+            return {"ok": True, **ai.ask_notes(words("question", 2000), items)}
+        if action == "ai/tidy":
+            return {"ok": True, **ai.tidy(items, _id(body, "folder", ("",)))}
+        if action == "ai/summary-send":
+            item, host = document(), require_tablet()
+            actions = body.get("actions", [])
+            if not isinstance(actions, list) or len(actions) > 100 or not all(isinstance(a, str) and len(a) <= 1000 for a in actions):
+                raise UserError("Those actions can't be sent.")
+            pdf = generate.text_pdf(words("title", 200) or "Summary", words("summary", 20000),
+                                    kicker=f"Summary · {item.name}", checklist=[a for a in actions if a.strip()])
+            tablet.upload(host, f"{item.name} – summary", pdf, "pdf", item.parent if item.parent in items else "")
+        elif action == "ai/tidy-apply":
+            host = require_tablet()
+            changes = body.get("changes")
+            if not isinstance(changes, list) or not changes or len(changes) > ai.TIDY_LIMIT:
+                raise UserError("Nothing to change.")
+            edits = []
+            for change_ in changes:
+                if not isinstance(change_, dict):
+                    raise UserError("Unknown document.")
+                item = items.get(_id(change_, "id"))
+                if item is None or item.is_folder:
+                    raise UserError("Unknown document.")
+                fields = {}
+                name = _text(change_, "name")
+                if name != item.name:
+                    fields["visibleName"] = name
+                parent = _id(change_, "parent", ("",))
+                if parent != item.parent:
+                    if parent and not (parent in items and items[parent].is_folder):
+                        raise UserError("Unknown folder.")
+                    fields["parent"] = parent
+                if fields:
+                    edits.append((item.id, fields))
+            for doc, fields in edits:  # all checked before anything is changed
+                tablet.edit_metadata(host, doc, restart=False, **fields)
+            if edits:
+                tablet.restart_app(host)
+        else:
+            raise UserError("Unknown action.")
+    except ai.AIError as exc:
+        raise UserError(str(exc)) from exc
+    except (ValueError, RuntimeError, KeyError, OSError) as exc:
+        raise UserError(str(exc)) from exc
+    time.sleep(2)  # give the tablet's app a moment before reading its files
+    return sync()
 
 
 def _auto_sync_loop() -> None:
@@ -557,8 +665,13 @@ class Handler(BaseHTTPRequestHandler):
             elif action == "sync":
                 self._json(sync())
             elif action == "config":
-                workflow.update_config(**settings_changes(body))
+                changes, key = settings_changes(body), api_key_change(body)
+                workflow.update_config(**changes)
+                if key is not False:
+                    ai.save_key(key)
                 self._json({"ok": True})
+            elif action.startswith("ai/"):
+                self._json(ai_action(action, body))
             else:
                 self._json(change(action, body, raw, parse_qs(url.query)))
         except UserError as exc:

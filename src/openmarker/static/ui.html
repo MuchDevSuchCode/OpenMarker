@@ -104,6 +104,22 @@
   .section { grid-column: 1 / -1; font: 600 13px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 8px; }
   .snippet { font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+  /* AI results */
+  #ai-body { margin-bottom: 4px; }
+  #ai-body h4 { margin: 18px 0 6px; font: 600 12px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  .sheet .ai-out { white-space: pre-wrap; color: var(--ink); font: 16px/1.6 var(--serif); margin: 0 0 6px; user-select: text; }
+  .sheet .ai-error { color: var(--accent); }
+  .sheet .ai-note { font-size: 12.5px; margin: 14px 0 0; }
+  .ai-actions { margin: 0; padding-left: 1.2em; line-height: 1.6; user-select: text; }
+  .ai-sources { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pick { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .sheet .pick input { width: auto; margin-top: 4px; accent-color: var(--accent); }
+  .pick b { display: block; font-weight: 600; }
+  .pick small { display: block; color: var(--muted); font-size: 12.5px; }
+  .ai-row { grid-column: 1 / -1; }
+  .set-link { border: 0; background: none; padding: 0; min-height: 0; margin-top: 6px; color: var(--muted); font-size: 12.5px; text-decoration: underline; }
+  .set-row .stack-v { display: block; }
+
   /* Settings */
   dialog.sheet.settings { width: min(680px, 94vw); padding: 0; overflow: hidden; }
   .settings form { display: flex; flex-direction: column; max-height: calc(100dvh - 34px); }
@@ -158,7 +174,7 @@
   .version { display: block; width: 100%; text-align: left; padding: 9px 11px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
   .version[aria-current="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
   .version small { display: block; color: var(--muted); }
-  dialog.sheet { width: min(420px, 92vw); height: auto; border: 1px solid var(--line); border-radius: 14px; padding: 22px; background: var(--surface); box-shadow: var(--shadow); }
+  dialog.sheet { width: min(420px, 92vw); height: fit-content; border: 1px solid var(--line); border-radius: 14px; padding: 22px; background: var(--surface); box-shadow: var(--shadow); }
   dialog.sheet::backdrop { background: rgba(20, 16, 10, .45); }
   .sheet h3 { margin: 0 0 14px; font: 600 19px var(--serif); }
   .sheet input, .sheet select { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
@@ -173,9 +189,10 @@
   .compare img { max-width: 100%; max-height: 300px; display: block; }
   .field { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; margin-top: 10px; font-size: 14px; }
   .field input[type=range] { padding: 0; accent-color: var(--accent); }
-  .busy { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; background: color-mix(in srgb, var(--paper) 78%, transparent); font: 600 18px var(--serif); }
-  .busy.on { display: grid; }
-  .toast { position: fixed; z-index: 60; left: 50%; bottom: 26px; transform: translate(-50%, 20px); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 999px; opacity: 0; transition: .2s ease; pointer-events: none; font-size: 14px; }
+  /* Both are popovers so that they show above open dialogs (the viewer and the sheets). */
+  .busy { position: fixed; inset: 0; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; color: var(--ink); place-items: center; background: color-mix(in srgb, var(--paper) 78%, transparent); font: 600 18px var(--serif); }
+  .busy:popover-open { display: grid; }
+  .toast { position: fixed; inset: auto auto 26px 50%; margin: 0; border: 0; overflow: visible; transform: translate(-50%, 20px); background: var(--ink); color: var(--paper); padding: 10px 18px; border-radius: 999px; opacity: 0; transition: .2s ease; pointer-events: none; font-size: 14px; }
   .toast.show { opacity: 1; transform: translate(-50%, 0); }
   @media (max-width: 720px) { body { grid-template-columns: 1fr; } aside { display: none; } main { padding: 18px; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -250,6 +267,13 @@
     <div class="actions">
       <input class="search" id="search" type="search" placeholder="Search names and handwriting" aria-label="Search names and handwriting">
       <button class="pill" id="new-folder">New folder</button>
+      <div class="menu" id="ai-menu" hidden>
+        <button class="pill" id="ai" aria-haspopup="true">✦ AI</button>
+        <div class="menu-list">
+          <button id="ai-ask">Ask your notes…</button>
+          <button id="ai-tidy">Suggest names and folders</button>
+        </div>
+      </div>
       <div class="menu" id="send-menu">
         <button class="pill accent" id="send" aria-haspopup="true">Send to tablet</button>
         <div class="menu-list">
@@ -274,6 +298,7 @@
     <span class="meta" id="v-meta"></span>
     <a class="pill" id="v-export">Export PDF</a>
     <button class="pill" id="v-text" aria-pressed="false">Convert to text</button>
+    <button class="pill" id="v-ai" hidden>✦ Summarise</button>
     <button class="pill" id="v-history">History</button>
     <div class="menu" id="v-menu">
       <button class="pill" id="v-more" aria-haspopup="true" aria-label="More actions">⋯</button>
@@ -366,6 +391,18 @@
           <input id="set-md-tag" placeholder="e.g. export" autocomplete="off" spellcheck="false" maxlength="100"></label>
       </section>
       <section class="set-group">
+        <h4>AI (optional)</h4>
+        <label class="set-row inline"><span><b>AI features</b><small>Summaries, better handwriting to text, questions about your notes, and tidy-up suggestions. What you use a feature on is sent to Anthropic's Claude API and billed to your key. Nothing is sent until you use one.</small></span>
+          <input type="checkbox" class="switch" id="set-ai" role="switch"></label>
+        <label class="set-row"><span><b>API key</b><small>An Anthropic API key. Kept in a file on this computer and never shown again.</small></span>
+          <span class="stack-v"><input type="password" id="set-ai-key" autocomplete="off" spellcheck="false" maxlength="400">
+            <button type="button" class="set-link" id="set-ai-clear" hidden>Remove the saved key</button></span></label>
+        <label class="set-row"><span><b>Model</b><small>More capable models read handwriting better and cost more.</small></span>
+          <select id="set-ai-model"></select></label>
+        <label class="set-row"><span><b>Answer tagged pages</b><small>Write a question on a page, give the page this tag on the tablet, and sync: the answer comes back as a document beside it. Leave empty to turn this off.</small></span>
+          <input id="set-ai-tag" placeholder="e.g. ask" autocomplete="off" spellcheck="false" maxlength="100"></label>
+      </section>
+      <section class="set-group">
         <h4>On this computer</h4>
         <div class="set-row"><span><b>Data folder</b><small>The mirror, version history, search index and settings file.</small></span><span class="value"><code id="set-folder"></code></span></div>
         <div class="set-row inline"><span><b>Handwriting search</b></span><span class="value" id="set-ocr"></span></div>
@@ -380,8 +417,13 @@
     </div>
   </form>
 </dialog>
-<div class="busy" id="busy" role="status" aria-live="polite">Updating the tablet…</div>
-<div class="toast" id="toast" role="status"></div>
+<dialog class="sheet wide" id="ai-sheet" aria-labelledby="ai-title">
+  <h3 id="ai-title"></h3>
+  <div id="ai-body"></div>
+  <div class="row" id="ai-buttons"></div>
+</dialog>
+<div class="busy" id="busy" role="status" aria-live="polite" popover="manual">Updating the tablet…</div>
+<div class="toast" id="toast" role="status" popover="manual"></div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -407,10 +449,10 @@ const api = async (path, body) => {
 // Run something that changes the tablet: blocks the page, reports the outcome, reloads.
 async function act(message, request, done) {
   $("busy").textContent = message;
-  $("busy").classList.add("on");
+  $("busy").showPopover();
   let result;
   try { result = await request(); } catch { result = { ok: false, error: "Something went wrong talking to the app." }; }
-  $("busy").classList.remove("on");
+  $("busy").hidePopover();
   if (result.ok) { toast(done); await loadLibrary(); } else toast(result.error || "That didn't work.");
   loadStatus();
   return result.ok;
@@ -456,10 +498,16 @@ const trash = async item => {
 };
 const currentFolder = () => state.byId.get(state.folder)?.folder ? state.folder : "";
 const toast = message => {
-  $("toast").textContent = message;
-  $("toast").classList.add("show");
+  const box = $("toast");
+  box.textContent = message;
+  if (box.matches(":popover-open")) box.hidePopover();
+  box.showPopover();  // shown last, so it sits above whatever dialog is open
+  requestAnimationFrame(() => box.classList.add("show"));
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => $("toast").classList.remove("show"), 3200);
+  toast.timer = setTimeout(() => {
+    box.classList.remove("show");
+    toast.timer = setTimeout(() => box.hidePopover(), 250);
+  }, 3600);
 };
 const ago = iso => {
   if (!iso || !Number.isFinite(Date.parse(iso))) return "date unknown";
@@ -556,6 +604,10 @@ function renderGrid() {
   const query = state.query.toLowerCase();
   const list = query ? state.items.filter(i => !isTrashed(i) && i.name.toLowerCase().includes(query)) : children(state.folder);
   grid.replaceChildren(...sorted(list).map(card));
+  if (query.length > 2 && state.status?.ai) {
+    grid.prepend(el("div", { className: "ai-row" },
+      el("button", { className: "pill", textContent: `✦ Ask AI: “${state.query}”`, onclick: () => askNotes(state.query) })));
+  }
   if (query && state.hits.length) {
     grid.append(el("div", { className: "section", textContent: "Found in handwriting and text" }), ...state.hits.map(hitCard));
     grid.style.display = "";
@@ -605,6 +657,7 @@ function showDoc(item, focusPage) {
   const pages = $("pages");
   pages.replaceChildren(el("div", { className: "text-bar" },
     el("span", { id: "text-note", textContent: "Recognising handwriting…" }),
+    ...(state.status?.ai ? [el("button", { className: "pill", textContent: "✦ Improve with AI", title: "Read the handwriting again with AI", onclick: improveText })] : []),
     el("button", { className: "pill", textContent: "Copy all", onclick: copyText }),
     el("a", { className: "pill", textContent: "Download .txt", href: `/api/text/${item.id}.txt` }),
     el("a", { className: "pill", textContent: "Download .md", href: `/api/text/${item.id}.md` })));
@@ -702,6 +755,9 @@ async function loadStatus() {
   $("sync").disabled = !s.connected || !s.set_up || $("sync").dataset.busy === "1";
   showConnection();
   $("image-subject").disabled = !s.subject_cutout;
+  $("ai-menu").hidden = !s.ai;
+  $("v-ai").hidden = !s.ai;
+  if (was && was.ai !== s.ai) renderGrid();
   for (const id of ["send", "new-folder"]) $(id).disabled = !s.connected || !s.set_up;
   if (s.last_sync && state.lastSync && s.last_sync !== state.lastSync) loadLibrary();  // a background sync finished
   state.lastSync = s.last_sync;
@@ -716,7 +772,8 @@ $("sync").onclick = async () => {
   const result = await api("/api/sync", {}).catch(() => ({ ok: false, error: "failed" }));
   button.dataset.busy = ""; button.textContent = "Sync now";
   if (result.ok) {
-    toast(result.fetched || result.removed ? `Synced: ${result.fetched} file${result.fetched === 1 ? "" : "s"} updated` : "Already up to date");
+    const answered = result.answered ? ` · ${result.answered} answer${result.answered === 1 ? "" : "s"} sent` : "";
+    toast(result.ai_error || (result.fetched || result.removed || answered ? `Synced: ${result.fetched} file${result.fetched === 1 ? "" : "s"} updated${answered}` : "Already up to date"));
     await loadLibrary();
   } else {
     toast(result.error || "Sync failed");
@@ -738,6 +795,14 @@ $("open-settings").onclick = async () => {
   $("set-calendar").value = c.calendar;
   $("set-md-dir").value = c.markdown_dir;
   $("set-md-tag").value = c.markdown_tag;
+  $("set-ai").checked = c.ai_enabled;
+  $("set-ai-key").value = "";
+  $("set-ai-key").placeholder = { saved: "Saved. Type a new key to replace it", environment: "Using the key from this computer's environment" }[c.ai_key] || "sk-ant-…";
+  $("set-ai-clear").hidden = c.ai_key !== "saved";
+  $("set-ai-model").replaceChildren(...c.ai_models.map(id => el("option", { value: id, textContent: MODEL_NAMES[id] || id })));
+  $("set-ai-model").value = c.ai_model;
+  $("set-ai-tag").value = c.ai_answer_tag;
+  settings.key = c.ai_key; settings.clearKey = false;
   $("set-folder").textContent = c.folder;
   $("set-ocr").textContent = c.handwriting_search ? "Available" : "Needs Windows";
   $("set-cutout").textContent = c.subject_cutout ? "Installed" : "Not installed";
@@ -747,14 +812,29 @@ $("open-settings").onclick = async () => {
   $("sidebar").classList.remove("expanded"); $("nav-toggle").setAttribute("aria-expanded", "false");
   $("settings").showModal();
 };
+const settings = { key: "", clearKey: false };
+const MODEL_NAMES = {
+  "claude-opus-5-5": "Claude Opus 5.5 (recommended)", "claude-sonnet-5-5": "Claude Sonnet 5.5 (costs less)",
+  "claude-haiku-5-5": "Claude Haiku 5.5 (costs least)", "claude-fable-5-2": "Claude Fable 5.2 (most capable, costs most)",
+};
+$("set-ai-clear").onclick = () => {
+  settings.clearKey = true; settings.key = "";
+  $("set-ai-clear").hidden = true;
+  $("set-ai-key").placeholder = "The saved key is removed when you save";
+};
 $("set-cancel").onclick = () => $("settings").close();
+$("settings").addEventListener("close", () => { $("set-ai-key").value = ""; });  // a typed key does not linger in the page
 $("settings-form").oninput = () => { $("set-error").textContent = ""; };
 $("settings-form").onsubmit = async event => {
   event.preventDefault();
+  const key = $("set-ai-key").value.trim();
+  if ($("set-ai").checked && !key && !settings.key) { $("set-error").textContent = "Add an API key to turn on AI features."; return; }
   $("set-save").disabled = true;
   const result = await api("/api/config", {
     wifi_host: $("set-wifi").value, tablet_name: $("set-name").value, auto_sync: $("set-auto").checked,
     calendar: $("set-calendar").value, markdown_dir: $("set-md-dir").value, markdown_tag: $("set-md-tag").value,
+    ai_enabled: $("set-ai").checked, ai_model: $("set-ai-model").value, ai_answer_tag: $("set-ai-tag").value,
+    ...(key ? { ai_key: key } : settings.clearKey ? { ai_key_clear: true } : {}),
   }).catch(error => ({ ok: false, error: error.message }));
   $("set-save").disabled = false;
   if (!result.ok) { $("set-error").textContent = result.error || "Couldn't save the settings."; return; }
@@ -885,6 +965,91 @@ addEventListener("drop", event => {
 
 // Viewer actions
 const viewed = () => state.byId.get(state.doc);
+
+// AI features. They appear only when AI is switched on in Settings.
+const canChange = () => Boolean(state.status?.connected && state.status?.set_up);
+const para = (className, textContent) => el("p", { className, textContent });
+function aiSheet(title, nodes = [], buttons = []) {
+  $("ai-title").textContent = title;
+  $("ai-body").replaceChildren(...nodes.filter(Boolean));
+  $("ai-buttons").replaceChildren(...buttons, el("button", { className: "pill", textContent: "Close", onclick: () => $("ai-sheet").close() }));
+  if (!$("ai-sheet").open) $("ai-sheet").showModal();
+}
+// Shows the sheet in a waiting state, makes the request, and returns the result, or null
+// if it failed (the sheet then says why) or the sheet was closed meanwhile.
+async function aiRun(title, waiting, path, body) {
+  aiSheet(title, [para("", waiting)]);
+  const run = aiRun.latest = {};
+  let result;
+  try { result = await api(path, body); } catch (error) { result = { ok: false, error: error.message }; }
+  if (aiRun.latest !== run || !$("ai-sheet").open) return null;
+  if (!result.ok) { aiSheet(title, [para("ai-error", result.error || "That didn't work.")]); return null; }
+  return result;
+}
+$("v-ai").onclick = async () => {
+  const item = viewed();
+  const r = await aiRun(`Summary of “${item.name}”`, "Reading the pages… this can take a minute.", "/api/ai/summary", { id: item.id });
+  if (!r) return;
+  const text = [r.title, "", r.summary, ...(r.actions.length ? ["", "Actions", ...r.actions.map(a => `- ${a}`)] : [])].join("\n");
+  aiSheet(r.title || "Summary", [
+    para("ai-out", r.summary),
+    r.actions.length ? el("h4", { textContent: "Actions" }) : null,
+    r.actions.length ? el("ul", { className: "ai-actions" }, ...r.actions.map(a => el("li", { textContent: a }))) : null,
+    r.note ? para("ai-note", r.note) : null,
+  ], [
+    el("button", { className: "pill", textContent: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(text); toast("Copied"); } catch { toast("Couldn't copy."); } } }),
+    el("button", { className: "pill accent", textContent: "Send to tablet", disabled: !canChange(), onclick: async () => {
+      $("ai-sheet").close();
+      await act("Sending the summary to the tablet…", () => api("/api/ai/summary-send", { id: item.id, title: r.title, summary: r.summary, actions: r.actions }), "Summary sent to the tablet");
+    } }),
+  ]);
+};
+async function improveText() {
+  const item = viewed();
+  const r = await aiRun("Improve with AI", "Reading the handwriting… this takes a few seconds for each page.", "/api/ai/transcribe", { id: item.id });
+  if (!r) return;
+  $("ai-sheet").close();
+  if (state.doc === item.id && state.textMode) {
+    state.text = r.pages;
+    document.querySelectorAll("#pages .ptext").forEach((slot, index) => { slot.textContent = r.pages[index] || ""; });
+    $("text-note").textContent = "Read with AI. Check it against the page: it can still make mistakes.";
+  }
+  toast(r.left ? `Read ${r.done} pages; ${r.left} more to go. Press it again to continue.`
+    : r.done ? `Read ${r.done} page${r.done === 1 ? "" : "s"} with AI` : "Every page was already read with AI.");
+}
+async function askNotes(question) {
+  if (!question) question = await ask({ title: "Ask your notes", text: "The answer comes from the recognised text of your notebooks.", value: "", ok: "Ask" });
+  if (!question) return;
+  const r = await aiRun("Ask your notes", "Reading your notes…", "/api/ai/ask", { question });
+  if (!r) return;
+  aiSheet(question, [
+    para("ai-out", r.answer),
+    r.sources.length ? el("h4", { textContent: "From" }) : null,
+    r.sources.length ? el("div", { className: "ai-sources" }, ...r.sources.map(source =>
+      el("button", { className: "pill", textContent: `${source.name} · page ${source.number}`, onclick: () => { $("ai-sheet").close(); location.hash = `doc/${source.doc}/${source.page}`; } }))) : null,
+    r.note ? para("ai-note", r.note) : null,
+  ]);
+}
+$("ai-ask").onclick = () => askNotes("");
+$("ai-tidy").onclick = async () => {
+  const title = "Suggest names and folders";
+  const r = await aiRun(title, "Looking through this folder…", "/api/ai/tidy", { folder: currentFolder() });
+  if (!r) return;
+  if (!r.suggestions.length) return aiSheet(title, [para("", "Nothing to suggest: what is here is already well named and filed."), r.note ? para("ai-note", r.note) : null]);
+  const rows = r.suggestions.map(suggestion => {
+    const box = el("input", { type: "checkbox", checked: true });
+    const detail = [suggestion.name !== suggestion.current ? `was “${suggestion.current}”` : "", suggestion.parent_name ? `move to ${suggestion.parent_name}` : "", suggestion.reason].filter(Boolean).join(" · ");
+    return { suggestion, box, label: el("label", { className: "pick" }, box, el("span", {}, el("b", { textContent: suggestion.name }), el("small", { textContent: detail }))) };
+  });
+  aiSheet(title, [para("", "Untick anything you don't want. Nothing changes until you apply."), ...rows.map(row => row.label), r.note ? para("ai-note", r.note) : null], [
+    el("button", { className: "pill accent", textContent: "Apply on the tablet", disabled: !canChange(), onclick: async () => {
+      const changes = rows.filter(row => row.box.checked).map(({ suggestion }) => ({ id: suggestion.id, name: suggestion.name, parent: suggestion.parent }));
+      if (!changes.length) return toast("Nothing is ticked.");
+      $("ai-sheet").close();
+      await act("Renaming and moving on the tablet…", () => api("/api/ai/tidy-apply", { changes }), "Tidied up");
+    } }),
+  ]);
+};
 $("v-history").onclick = showHistory;
 $("v-text").onclick = () => {
   if (state.version) { state.version = ""; $("v-body").classList.remove("with-history"); state.textMode = true; return showDoc(viewed()); }

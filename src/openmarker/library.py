@@ -33,6 +33,7 @@ class Item:
     # Pages inserted on the tablet are absent.
     source_pages: dict[str, int] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
+    page_tags: dict[str, list[str]] = field(default_factory=dict)  # page id -> tags put on that page
     store: Path | None = None
 
     @property
@@ -82,6 +83,17 @@ def _tags(content: dict) -> list[str]:
     return sorted(names)
 
 
+def _page_tags(content: dict) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    entries = content.get("pageTags")
+    if isinstance(entries, list):
+        for tag in entries:
+            if isinstance(tag, dict) and isinstance(tag.get("name"), str) and isinstance(tag.get("pageId"), str):
+                if tag["name"].strip():
+                    out.setdefault(tag["pageId"], []).append(tag["name"].strip())
+    return out
+
+
 def load(store: Path | None = None) -> dict[str, Item]:
     store = Path(store) if store else default_store()
     items: dict[str, Item] = {}
@@ -114,6 +126,7 @@ def load(store: Path | None = None) -> dict[str, Item]:
             page_ids=page_ids,
             source_pages=source_pages,
             tags=_tags(content),
+            page_tags=_page_tags(content),
             store=store,
         )
     return items

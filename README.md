@@ -39,6 +39,10 @@ or supported by the tablet's manufacturer.
   native notebook page made of fineliner strokes that you can erase, select
   and draw over on the tablet.
 - **Organise.** New folders, rename, move and trash from the browser.
+- **AI, if you want it.** Off by default. With your own Anthropic API key:
+  summaries with action lists, more accurate handwriting to text, questions
+  answered from your notes, name and folder suggestions, and answers to
+  questions you write on the tablet. See [AI features](#ai-features-optional).
 - **Hooks.** Run your own command for every document that changes.
 
 ## Requirements
@@ -95,6 +99,31 @@ After the first connection OpenMarker finds the tablet on your network by the
 name it announces (mDNS). If your network blocks that, open **Settings** in
 the sidebar and type the tablet's address into **Wi-Fi address**.
 
+### AI features (optional)
+
+AI is off until you switch it on under **Settings › AI** and enter an
+[Anthropic API key](https://console.anthropic.com/). Use is billed to that
+key by Anthropic. What you run a feature on is sent to Anthropic's Claude API;
+nothing is sent until you use one.
+
+| Feature | Where | What is sent |
+| --- | --- | --- |
+| **Summarise** | *Summarise* in a document | Pictures of that document's pages. The summary and its action list can be sent to the tablet as a page. |
+| **Improve with AI** | *Convert to text* in a document | Pictures of that document's handwritten pages, 20 at a time. The text replaces the built-in recogniser's and feeds search. Works on macOS and Linux too. |
+| **Ask your notes** | *AI* menu, or *Ask AI* in search results | The recognised text of your notebooks (the closest pages, if the library is very large) and your question. |
+| **Suggest names and folders** | *AI* menu | The names and opening text of the documents in the current folder, and your folder names. Nothing changes until you apply the suggestions you ticked. |
+| **Answer tagged pages** | Set a tag under Settings › AI | After a sync, a picture of each page carrying that tag. The answer arrives as a document next to the notebook. A page is answered again only if it changes. |
+
+*Answer tagged pages* is the only feature that runs by itself, and only for
+pages you tagged on the tablet. It runs when you sync from the browser (or
+automatic sync does), not from `launch pull`. Leave its tag empty to keep it
+off.
+
+The model is `claude-opus-5-5` unless you choose another in Settings. The key
+is kept in `anthropic_key` in the data folder and is never sent back to the
+browser; if `ANTHROPIC_API_KEY` is set in the environment, that is used when
+no key is saved.
+
 ### Sending without a restart
 
 New documents are handed to the tablet's built-in upload service, the *USB web
@@ -133,6 +162,7 @@ Everything stays in the `openmarker` folder in your home directory:
 | `index.db` | Recognised handwriting, for search. |
 | `config.json` | Settings (below). |
 | `id_ed25519` | The SSH key that unlocks your tablet. Treat it like a password. |
+| `anthropic_key` | Your Anthropic API key, if you saved one for the AI features. Treat it like a password. |
 | `known_hosts` | Your tablet's identity, so nothing else is mistaken for it. |
 
 Most settings can be changed in **Settings** in the sidebar; hooks are edited
@@ -146,6 +176,9 @@ in the file. Settings in `config.json`:
 | `calendar` | An `.ics` file or address for the agenda page. |
 | `markdown_dir` | After each sync, export changed notebooks into this folder. |
 | `markdown_tag` | Only export documents carrying this tag. |
+| `ai_enabled` | Switch the AI features on. Off by default. |
+| `ai_model` | The Claude model to use. |
+| `ai_answer_tag` | Answer pages carrying this tag after a sync. Empty: off. |
 | `hooks` | Commands to run for every changed document, e.g. `[{"run": "python my_script.py"}]`. Each receives `OPENMARKER_DOC_ID`, `OPENMARKER_NAME`, `OPENMARKER_PATH`, `OPENMARKER_TAGS` and `OPENMARKER_MIRROR`. |
 
 ## How it works
@@ -159,8 +192,9 @@ handwriting recogniser reads.
 
 The web page is served only to this computer (`127.0.0.1`) and nothing is
 sent to any outside service. The exceptions are things you ask for: fetching a
-web page or calendar you point it at, and a one-time model download for the AI
-cut-out.
+web page or calendar you point it at, a one-time model download for the AI
+cut-out, and, only if you switch them on, the AI features, which send what you
+use them on to Anthropic.
 
 ## Project layout
 
@@ -180,6 +214,7 @@ src/openmarker/
     generate.py   agenda pages and web pages as PDF
     images.py     picture clean-up and cut-out
     ink.py        traces drawings into pen strokes
+    ai.py         the optional AI features
 tests/
 launch.cmd, launch.sh
 ```
