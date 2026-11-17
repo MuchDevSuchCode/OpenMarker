@@ -758,8 +758,11 @@ async function showHistory() {
   draw();
 }
 
-async function loadLibrary() {
+async function loadLibrary(background = false) {
   const data = await api("/api/library");
+  const signature = JSON.stringify(data.items.map(i => [i.id, i.name, i.parent, i.modified, i.pages.length]));
+  if (background && state.signature && signature !== state.signature) toast("Updated from the tablet");
+  state.signature = signature;
   state.items = data.items;
   state.byId = new Map(data.items.map(i => [i.id, i]));
   $("source").textContent = data.source === "mirror" ? "" : "Showing the desktop app's cache. Sync the tablet to see its current contents.";
@@ -781,7 +784,7 @@ async function loadStatus() {
   $("v-ai").hidden = !s.ai;
   if (was && was.ai !== s.ai) renderGrid();
   for (const id of ["send", "new-folder"]) $(id).disabled = !s.connected || !s.set_up;
-  if (s.last_sync && state.lastSync && s.last_sync !== state.lastSync) loadLibrary();  // a background sync finished
+  if (s.last_sync && state.lastSync && s.last_sync !== state.lastSync) loadLibrary(true);  // a background sync finished
   state.lastSync = s.last_sync;
   const notice = $("notice");
   notice.hidden = s.set_up;
@@ -1108,7 +1111,10 @@ addEventListener("hashchange", route);
 
 loadLibrary();
 loadStatus();
-setInterval(loadStatus, 5000);
+setInterval(loadStatus, 3000);
+// Browsers slow the timer of a page that is not in view; catch up the moment it is looked at again.
+document.addEventListener("visibilitychange", () => { if (!document.hidden) loadStatus(); });
+addEventListener("focus", loadStatus);
 </script>
 </body>
 </html>

@@ -141,6 +141,44 @@ def local_hashes(mirror: Path) -> dict[str, str]:
     return hashes
 
 
+# Runs on the tablet: prints a line each time its documents have changed and
+# then stayed the same for one interval, so a burst of writes counts once.
+# What it prints is a fingerprint of every file's name, size and time.
+_WATCH = (
+    "cd {store} || exit 1; last=; sent=; "
+    "while :; do "
+    "now=$(find . -type f ! -name {skip} -exec stat -c '%n %s %Y' {{}} + 2>/dev/null | sha256sum); "
+    'if [ "$now" = "$last" ] && [ "$now" != "$sent" ]; then echo "$now"; sent=$now; fi; '
+    "last=$now; sleep {interval}; done"
+)
+
+
+def changes(host: str, interval: int = 2):
+    """Yield once each time the tablet's documents change, for as long as the tablet stays reachable.
+
+    One connection stays open and the tablet does the watching, so a change
+    is known a few seconds after it happens. Ends when the connection drops
+    (the tablet slept or left the network).
+    """
+    command = _WATCH.format(store=REMOTE_STORE, skip=SKIP[0], interval=int(interval))
+    process = subprocess.Popen(
+        _ssh_args() + ["-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=2", f"root@{host}", command],
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    try:
+        first = True
+        for line in process.stdout:
+            if not line.strip():
+                continue
+            if first:  # the state when watching began, not a change
+                first = False
+                continue
+            yield
+    finally:
+        process.terminate()
+        process.wait()
+
+
 def pull(host: str = USB_HOST, mirror: Path | None = None, prune: bool = False) -> PullResult:
     mirror = Path(mirror) if mirror else default_mirror()
     remote = remote_hashes(host)

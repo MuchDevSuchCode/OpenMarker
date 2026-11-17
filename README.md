@@ -22,7 +22,8 @@ or supported by the tablet's manufacturer.
   computer over SSH. No cloud account is involved.
 - **Finds the tablet by itself.** Notices when the tablet comes online over
   USB or Wi-Fi, follows it when its Wi-Fi address changes, and can sync as
-  soon as it appears.
+  soon as it appears. With automatic sync on, a change made on the tablet
+  shows in the browser a few seconds later.
 - **Library in your browser.** Folders, thumbnails, a page viewer, and search
   across document names.
 - **Handwriting search and convert to text.** Uses the handwriting recogniser

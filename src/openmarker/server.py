@@ -459,6 +459,27 @@ def _auto_sync_loop() -> None:
             pass
 
 
+def _follow_tablet() -> None:
+    """With automatic sync on, sync within seconds of anything changing on the tablet.
+
+    The timed sync in _auto_sync_loop stays as the safety net.
+    """
+    while True:
+        try:
+            host = _seen[0]
+            if host and tablet.is_set_up() and workflow.load_config().get("auto_sync"):
+                for _ in tablet.changes(host):
+                    if not workflow.load_config().get("auto_sync"):
+                        break
+                    try:
+                        sync()  # waits its turn, so a change during another sync is not missed
+                    except UserError:
+                        pass
+        except Exception:  # the watcher must never take the server down
+            pass
+        time.sleep(WATCH_SECONDS)
+
+
 def _index_existing() -> None:
     store, source = store_dir()
     if source == "mirror":
@@ -733,6 +754,7 @@ def serve(port: int = PORT, open_browser: bool = True) -> None:
     threading.Thread(target=_index_existing, daemon=True).start()
     threading.Thread(target=_auto_sync_loop, daemon=True).start()
     threading.Thread(target=_watch_tablet, daemon=True).start()
+    threading.Thread(target=_follow_tablet, daemon=True).start()
     url = f"http://127.0.0.1:{port}/"
     print(f"OpenMarker is running at {url}  (Ctrl+C to stop)")
     if open_browser:
