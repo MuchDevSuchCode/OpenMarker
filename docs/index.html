@@ -302,8 +302,8 @@
         </li>
         <li>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.500A1.500 1.500 0 0 1 4.500 5H9l2 2.500h8.500A1.500 1.500 0 0 1 21 9v9.500a1.500 1.500 0 0 1-1.500 1.500h-15A1.500 1.500 0 0 1 3 18.500z"/><path d="M12 11v5M9.500 13.500h5"/></svg>
-          <h3>Organise</h3>
-          <p>New folders, rename, move and trash, straight from the browser: right-click a document, a folder or the empty space beside them.</p>
+          <h3>Organise with a right-click</h3>
+          <p>New folders, rename, move, trash and put back, straight from the browser: right-click a document, a folder or the empty space beside them.</p>
         </li>
         <li>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.500 5l-3 14"/></svg>
@@ -313,7 +313,7 @@
         <li>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
           <h3>AI, if you want it</h3>
-          <p>Off by default. With your own API key: summaries, better handwriting to text, questions answered from your notes, and more.</p>
+          <p>Off by default. With your own API key: a chat about your notes, summaries, better handwriting to text, and more.</p>
         </li>
       </ul>
     </div>
@@ -355,7 +355,7 @@
       <div class="show">
         <div class="copy">
           <h3>Go back to any earlier version</h3>
-          <p>A version is kept each time a sync finds changes. Step back through them to see the page as it was, and restore one to the tablet as a copy. The current document is never overwritten.</p>
+          <p>A version is kept each time a sync finds changes. Step back through them to see the document as it was, with the pages it had then, and restore one to the tablet as a copy. The current document is never overwritten.</p>
         </div>
         <figure class="shot">
           <button type="button" aria-label="Enlarge screenshot: version history"><img src="img/history.webp" width="2040" height="1275" loading="lazy" alt="A notebook page shown as it was six days earlier, beside a History panel listing three dated versions and a Restore as a copy button."></button>
@@ -396,6 +396,36 @@
         </figure>
       </div>
 
+      <div class="show">
+        <div class="copy">
+          <h3>Right-click for everything</h3>
+          <p>Every document and folder has a menu: open it, convert it to text, export it, rename it, move it or send it to the trash. Right-click the empty space to make a folder, send something or sync.</p>
+          <ul>
+            <li>The same menu opens from the keyboard's menu key and from the <b>⋯</b> button on each card, for touch screens.</li>
+            <li>Things in the trash can be put back.</li>
+            <li>With AI switched on, the menu also offers a summary, a better reading of the handwriting, and a chat about that document or folder.</li>
+          </ul>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: the right-click menu"><img src="img/menu.webp" width="2040" height="1275" loading="lazy" alt="The library with a menu open over a notebook called Shed rebuild, listing Open, Convert to text, Export PDF, three AI actions, Rename, Move and Move to trash."></button>
+        </figure>
+      </div>
+
+      <div class="show flip">
+        <div class="copy">
+          <h3>Send now, deliver later</h3>
+          <p>The tablet does not have to be awake. Send a file, a picture, a web page or an agenda page at any time; if the tablet can't be reached, OpenMarker keeps it and delivers it the next time the tablet connects.</p>
+          <ul>
+            <li>The sidebar shows how many documents are waiting. Open the list to see them or remove one.</li>
+            <li>Delivery happens by itself, even with automatic sync switched off.</li>
+            <li>Rename, move, trash and new folder still need the tablet connected.</li>
+          </ul>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: documents waiting to be sent"><img src="img/waiting.webp" width="2040" height="1275" loading="lazy" alt="A list titled Waiting to send with four documents, each with a Remove button, while the sidebar says the tablet is not connected and four are waiting to send."></button>
+        </figure>
+      </div>
+
       <div class="pair">
         <figure class="shot">
           <button type="button" aria-label="Enlarge screenshot: the Send to tablet menu"><img src="img/send.webp" width="1650" height="840" loading="lazy" alt="The Send to tablet menu open, offering PDF or EPUB file, Picture, Web page and Today's agenda page."></button>
@@ -414,7 +444,7 @@
       <div class="head">
         <p class="kicker">AI, optional</p>
         <h2>Bring your own AI, or leave it off</h2>
-        <p>AI is switched off until you turn it on under <b>Settings › AI</b> and enter your own Anthropic API key. Each feature runs only on what you point it at.</p>
+        <p>AI is switched off until you turn it on under <b>Settings › AI</b> and enter your own Anthropic API key. Each feature runs only on what you point it at. The screenshots below show real replies about the sample library.</p>
       </div>
       <ul class="cards">
         <li><h3>Summarise</h3><p>A short summary and a list of actions for a document. Send it to the tablet as a page with boxes to tick.</p></li>
@@ -423,7 +453,35 @@
         <li><h3>Suggest names and folders</h3><p>Proposes names for notebooks that have none, and folders to file them in. Nothing changes until you apply what you ticked.</p></li>
         <li><h3>Answer tagged pages</h3><p>Write a question on the tablet, tag the page, and sync. The answer arrives as a document next to the notebook.</p></li>
       </ul>
-      <div class="note" style="margin-top:26px">
+      <div class="show" style="margin-top:clamp(48px, 7vw, 96px)">
+        <div class="copy">
+          <h3>Chat with your notes</h3>
+          <p>Ask a question in plain words, then follow up. The chat reads the recognised text of your notes and answers from it, saying so when the notes don't hold the answer.</p>
+          <ul>
+            <li>Replies appear as they are written, and you can stop one part-way.</li>
+            <li>Each reply names the pages it rests on. Select one to open that page; closing it returns you to the chat.</li>
+            <li>Keep the chat to all your notes, one folder or one document.</li>
+            <li>Send any reply to the tablet as a page.</li>
+            <li>A conversation lives only in the open page. It is not saved.</li>
+          </ul>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: a chat about a notebook"><img src="img/chat.webp" width="2040" height="1275" loading="lazy" alt="A chat about a notebook called Shed rebuild. The question And what order did I plan to build it in is answered with a numbered list, followed by buttons for the two pages the answer came from, and Copy and Send to tablet."></button>
+        </figure>
+      </div>
+
+      <div class="show flip">
+        <div class="copy">
+          <h3>A summary, and what to do next</h3>
+          <p><b>Summarise</b> reads a document's pages and gives a short summary with the actions it found. Send it to the tablet and it arrives as a page with a box to tick beside each action.</p>
+          <p>Summaries and answers go beside the document they belong to, or into a folder you name in Settings.</p>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: an AI summary"><img src="img/summary.webp" width="2040" height="1275" loading="lazy" alt="A summary of the Shed rebuild notebook: one paragraph, then a list of eleven actions such as Measure the old frame and Order cedar boards, with Copy and Send to tablet buttons."></button>
+        </figure>
+      </div>
+
+      <div class="note" style="margin-top:clamp(40px, 6vw, 72px)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4.5M12 17.5v.01"/></svg>
         <p><b>This is the one part that is not local.</b> What you use a feature on (page pictures, or recognised text for questions) is sent to Anthropic's Claude API, and use is billed to your key. Nothing is sent until you use a feature. Your key is kept in a file on your computer.</p>
       </div>
@@ -674,6 +732,14 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
           <details>
             <summary>The tablet's screen blanks when I send something</summary>
             <div><p>That is the tablet's app restarting. Switch on <b>USB web interface</b> in the tablet's storage settings and new documents arrive without a restart. Rename, move, trash and new folder always restart the app.</p></div>
+          </details>
+          <details>
+            <summary>I sent something while the tablet was asleep</summary>
+            <div><p>It was kept. The sidebar shows “waiting to send”, and the document goes to the tablet the next time it connects. If one keeps failing, the list says why; press <b>Sync now</b> to try it again, or remove it.</p></div>
+          </details>
+          <details>
+            <summary>The chat says there is no recognised text</summary>
+            <div><p>The chat reads text, not page pictures. Open the notebook and choose <b>Convert to text</b>, or right-click it and choose <b>Read the handwriting with AI</b>, then ask again.</p></div>
           </details>
           <details>
             <summary>Handwriting search finds nothing</summary>
