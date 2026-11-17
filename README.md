@@ -4,6 +4,9 @@ An open, local-first companion app for e-ink paper tablets. It talks to the
 tablet directly over USB or Wi-Fi, keeps a copy of your documents on your own
 computer, and adds things the official app doesn't do.
 
+Project page, with screenshots and a guide to setting up the tablet:
+<https://muchdevsuchcode.github.io/OpenMarker/>
+
 OpenMarker is an independent project. It is not affiliated with, endorsed by
 or supported by the tablet's manufacturer.
 

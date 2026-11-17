@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenMarker · an open, local-first companion for e-ink paper tablets</title>
+<meta name="description" content="OpenMarker syncs your e-ink paper tablet to your own computer over USB or Wi-Fi. Search your handwriting, convert it to text, keep version history, and send PDFs, web pages and pictures. No cloud account.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f3f0e8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191816" media="(prefers-color-scheme: dark)">
+<meta property="og:type" content="website">
+<meta property="og:title" content="OpenMarker">
+<meta property="og:description" content="An open, local-first companion app for e-ink paper tablets. Sync, search handwriting, convert to text, version history, send to tablet.">
+<meta property="og:url" content="https://muchdevsuchcode.github.io/OpenMarker/">
+<meta property="og:image" content="https://muchdevsuchcode.github.io/OpenMarker/img/social.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://muchdevsuchcode.github.io/OpenMarker/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b4472e'/%3E%3Cpath d='M18 46l4-13 19-19 9 9-19 19z' fill='%23fff'/%3E%3Cpath d='M16 50h32' stroke='%23fff' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --paper: #f3f0e8; --surface: #fbfaf6; --ink: #1d1c1a; --muted: #6f6a60;
+    --line: #dcd6c8; --accent: #b4472e; --accent-ink: #fff; --ok: #3d7a4e; --page: #fdfcf9;
+    --code-bg: #262320; --code-ink: #efe9dc; --code-dim: #a79f90;
+    --shadow: 0 1px 2px rgba(40,30,10,.08), 0 10px 30px rgba(40,30,10,.10);
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+    --wrap: 1140px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #191816; --surface: #22201d; --ink: #ece8df; --muted: #a09a8d;
+      --line: #37342e; --accent: #e0714f; --accent-ink: #1a1210; --ok: #7fbf8f; --page: #22201d;
+      --code-bg: #121110; --code-ink: #e8e2d5; --code-dim: #8d8679;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.4);
+    }
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 84px; -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 17px/1.6 var(--sans); }
+  img { max-width: 100%; height: auto; display: block; }
+  a { color: var(--accent); text-underline-offset: 3px; }
+  a:hover { text-decoration-thickness: 2px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+  h1, h2, h3 { font-family: var(--serif); letter-spacing: -.012em; line-height: 1.15; margin: 0; text-wrap: balance; }
+  h1 { font-size: clamp(2.3rem, 5.4vw, 4rem); font-weight: 600; }
+  h2 { font-size: clamp(1.8rem, 3.6vw, 2.6rem); font-weight: 600; }
+  h3 { font-size: 1.28rem; font-weight: 600; }
+  p { margin: 0 0 1em; }
+  code, kbd { font-family: var(--mono); font-size: .88em; }
+  :not(pre) > code { background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 2px 6px; border-radius: 5px; overflow-wrap: anywhere; }
+  .wrap { width: min(var(--wrap), 100% - 40px); margin-inline: auto; }
+  .skip { position: absolute; left: -9999px; top: 8px; background: var(--accent); color: var(--accent-ink); padding: 8px 14px; border-radius: 8px; z-index: 100; }
+  .skip:focus { left: 12px; }
+
+  /* Top bar */
+  .top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--paper) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  .top .wrap { display: flex; align-items: center; gap: 18px; min-height: 64px; }
+  .brand { font: 600 1.45rem/1 var(--serif); color: var(--ink); text-decoration: none; letter-spacing: -.01em; }
+  .brand span { color: var(--accent); }
+  .top nav { margin-left: auto; }
+  .top ul { display: flex; align-items: center; gap: 4px; list-style: none; margin: 0; padding: 0; }
+  .top li a { display: block; padding: 8px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: .95rem; }
+  .top li a:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
+  .top li a.gh { border: 1px solid var(--line); background: var(--surface); font-weight: 600; margin-left: 6px; }
+  #menu { display: none; margin-left: auto; padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: inherit; font: inherit; font-size: .95rem; cursor: pointer; }
+
+  /* Buttons */
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-weight: 600; text-decoration: none; }
+  .btn:hover { filter: brightness(.97); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+  /* Hero */
+  .hero { padding: clamp(40px, 7vw, 84px) 0 0; text-align: center; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 5px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--muted); font-size: .87rem; margin-bottom: 22px; }
+  .eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent); }
+  .hero h1 em { display: block; font-style: italic; color: var(--accent); }
+  .lede { max-width: 60ch; margin: 22px auto 30px; font-size: clamp(1.05rem, 1.6vw, 1.22rem); color: var(--muted); }
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .frame { margin: clamp(36px, 6vw, 64px) auto 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+  .frame-bar { display: flex; align-items: center; gap: 7px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  .frame-bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); }
+  .frame-bar span { margin-inline: auto; padding: 3px 16px; border-radius: 999px; background: var(--paper); color: var(--muted); font: .78rem var(--mono); transform: translateX(-24px); }
+  .facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: clamp(36px, 5vw, 56px); background: var(--line); border-block: 1px solid var(--line); }
+  .facts div { background: var(--paper); padding: 22px 16px; text-align: center; }
+  .facts b { display: block; font: 600 1.25rem var(--serif); }
+  .facts span { color: var(--muted); font-size: .92rem; }
+
+  /* Sections */
+  section { padding: clamp(56px, 8vw, 104px) 0; }
+  section.alt { background: var(--surface); border-block: 1px solid var(--line); }
+  .head { max-width: 62ch; margin-bottom: clamp(28px, 4vw, 48px); }
+  .kicker { font: 600 .8rem var(--sans); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .head p { color: var(--muted); font-size: 1.08rem; margin: 14px 0 0; }
+
+  /* Feature cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: 18px; list-style: none; margin: 0; padding: 0; }
+  .cards li { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+  .alt .cards li { background: var(--paper); }
+  .cards svg { width: 38px; height: 38px; padding: 8px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); margin-bottom: 14px; }
+  .cards h3 { font-size: 1.14rem; margin-bottom: 6px; }
+  .cards p { margin: 0; color: var(--muted); font-size: .96rem; }
+
+  /* Showcase rows */
+  .show { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); gap: clamp(24px, 5vw, 64px); align-items: center; }
+  .show + .show { margin-top: clamp(48px, 7vw, 96px); }
+  .show.flip { grid-template-columns: minmax(0, 8fr) minmax(0, 5fr); }
+  .show.flip > .copy { order: 2; }
+  .show h3 { font-size: clamp(1.4rem, 2.4vw, 1.8rem); margin-bottom: 12px; }
+  .show p { color: var(--muted); }
+  .show ul { margin: 0; padding-left: 1.1em; color: var(--muted); }
+  .show li { margin-bottom: 4px; }
+  .shot { margin: 0; }
+  .shot button { display: block; width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); cursor: zoom-in; transition: transform .2s ease; }
+  .shot button:hover { transform: translateY(-3px); }
+  .shot figcaption { margin-top: 10px; color: var(--muted); font-size: .87rem; text-align: center; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: clamp(48px, 7vw, 96px); }
+
+  /* Steps */
+  .steps { list-style: none; counter-reset: step; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .steps > li { counter-increment: step; position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px 24px 24px 78px; }
+  .alt .steps > li { background: var(--paper); }
+  .steps > li::before { content: counter(step); position: absolute; left: 22px; top: 22px; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font: 600 1.1rem var(--serif); }
+  .steps h3 { margin-bottom: 8px; }
+  .steps p:last-child, .steps ul:last-child, .steps .code:last-child { margin-bottom: 0; }
+  .steps ul { margin: 0 0 1em; padding-left: 1.15em; }
+  .steps li li { margin-bottom: 4px; }
+  .tag { display: inline-block; margin-left: 8px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font: 600 .72rem var(--sans); letter-spacing: .05em; text-transform: uppercase; vertical-align: middle; }
+  .path { font-weight: 600; }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 4vw, 48px); align-items: start; }
+
+  /* Callouts */
+  .note { display: flex; gap: 14px; padding: 16px 18px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-left-width: 4px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 7%, var(--surface)); margin: 0 0 22px; }
+  .note svg { flex: none; width: 22px; height: 22px; color: var(--accent); margin-top: 2px; }
+  .note p { margin: 0; font-size: .97rem; }
+
+  /* Code */
+  .code { position: relative; margin: 0 0 1em; border-radius: 10px; background: var(--code-bg); color: var(--code-ink); }
+  .code pre { margin: 0; padding: 42px 18px 16px; overflow-x: auto; font: .88rem/1.6 var(--mono); tab-size: 2; }
+  .code .dim { color: var(--code-dim); }
+  .code button { position: absolute; top: 8px; right: 8px; padding: 4px 11px; border: 1px solid #4a453d; border-radius: 6px; background: #35312b; color: var(--code-ink); font: .78rem var(--sans); cursor: pointer; }
+  .code button:hover { background: #443f37; }
+
+  /* Tables */
+  .table { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+  .alt .table { background: var(--paper); }
+  table { width: 100%; border-collapse: collapse; font-size: .95rem; }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font: 600 .78rem var(--sans); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { white-space: nowrap; }
+  h3.sub { margin: 36px 0 14px; }
+
+  /* FAQ */
+  details { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); margin-bottom: 10px; }
+  .alt details { background: var(--paper); }
+  summary { cursor: pointer; padding: 16px 20px; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 12px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; margin-left: auto; font: 400 1.4rem/1 var(--sans); color: var(--muted); }
+  details[open] summary::after { content: "–"; }
+  details > div { padding: 0 20px 18px; color: var(--muted); }
+  details > div p:last-child { margin-bottom: 0; }
+
+  /* Footer */
+  footer { padding: 44px 0 56px; color: var(--muted); font-size: .92rem; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 14px 40px; justify-content: space-between; }
+  footer p { margin: 0; max-width: 62ch; }
+
+  /* Lightbox */
+  dialog { border: 0; padding: 0; background: transparent; max-width: min(96vw, 1500px); max-height: 94vh; }
+  dialog::backdrop { background: rgba(15, 12, 8, .82); }
+  dialog img { max-height: 94vh; width: auto; border-radius: 10px; cursor: zoom-out; }
+
+  @media (max-width: 900px) {
+    .show, .show.flip, .two { grid-template-columns: minmax(0, 1fr); }
+    .show.flip > .copy { order: 0; }
+    .facts { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 820px) {
+    #menu { display: block; }
+    .top nav { display: none; position: absolute; left: 0; right: 0; top: 100%; background: var(--paper); border-bottom: 1px solid var(--line); padding: 8px 20px 16px; }
+    .top nav.open { display: block; }
+    .top ul { flex-direction: column; align-items: stretch; }
+    .top li a { padding: 12px; }
+    .top li a.gh { margin: 8px 0 0; text-align: center; }
+  }
+  @media (max-width: 560px) {
+    body { font-size: 16px; }
+    .pair { grid-template-columns: 1fr; }
+    .steps > li { padding: 70px 18px 20px; }
+    .steps > li::before { left: 18px; top: 18px; }
+    .frame-bar span { display: none; }
+    td, th { display: block; padding: 4px 16px; border: 0; }
+    thead { display: none; }
+    td:first-child { padding-top: 14px; white-space: normal; }
+    td:last-child { padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+  }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="OpenMarker home">Open<span>Marker</span></a>
+    <button id="menu" aria-expanded="false" aria-controls="site-nav">Menu</button>
+    <nav id="site-nav" aria-label="Page sections">
+      <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#tour">Tour</a></li>
+        <li><a href="#install">Install</a></li>
+        <li><a href="#device">Set up your tablet</a></li>
+        <li><a href="#reference">Reference</a></li>
+        <li><a href="#faq">Help</a></li>
+        <li><a class="gh" href="https://github.com/MuchDevSuchCode/OpenMarker">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="hero" id="top">
+    <div class="wrap">
+      <p class="eyebrow"><i></i> Early and experimental · v0.1</p>
+      <h1>Your paper tablet, <em>on your own terms</em></h1>
+      <p class="lede">OpenMarker is an open, local-first companion app for e-ink paper tablets. It talks to the tablet directly over USB or Wi-Fi, keeps a copy of your documents on your own computer, and adds things the official app doesn't do.</p>
+      <div class="cta">
+        <a class="btn primary" href="#install">Get started</a>
+        <a class="btn" href="#device">Set up your tablet</a>
+        <a class="btn" href="https://github.com/MuchDevSuchCode/OpenMarker">View the code</a>
+      </div>
+      <div class="frame">
+        <div class="frame-bar" aria-hidden="true"><i></i><i></i><i></i><span>127.0.0.1:8737</span></div>
+        <picture>
+          <source srcset="img/library-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="img/library.webp" width="2040" height="1275" alt="The OpenMarker library in a browser: folders and notebook thumbnails on the right, and a sidebar showing the tablet connected over USB with a Sync now button." fetchpriority="high">
+        </picture>
+      </div>
+    </div>
+    <div class="facts">
+      <div><b>No cloud account</b><span>Syncs straight from the tablet over SSH</span></div>
+      <div><b>USB or Wi-Fi</b><span>Finds the tablet by itself</span></div>
+      <div><b>Runs on your computer</b><span>Served only to 127.0.0.1</span></div>
+      <div><b>Code you can read</b><span>Plain Python, all of it on GitHub</span></div>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="head">
+        <p class="kicker">What it does</p>
+        <h2>Everything on the tablet, and a few things it can't do alone</h2>
+        <p>The library opens in your browser. Everything in it is also available as a command.</p>
+      </div>
+      <ul class="cards">
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 0 1 14-5.3L20 9"/><path d="M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-14 5.3L4 15"/><path d="M4 20v-5h5"/></svg>
+          <h3>Local sync</h3>
+          <p>Copies the tablet's documents to a mirror folder on your computer over SSH. No cloud account is involved.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5a10 10 0 0 1 14 0"/><path d="M8 15.5a6 6 0 0 1 8 0"/><circle cx="12" cy="19" r="1"/><path d="M2 9.5a14 14 0 0 1 20 0"/></svg>
+          <h3>Finds the tablet by itself</h3>
+          <p>Notices the tablet coming online over USB or Wi-Fi, follows it when its Wi-Fi address changes, and can sync as soon as it appears.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="7" height="9" rx="1"/><rect x="14" y="4" width="7" height="9" rx="1"/><path d="M3 17h7M14 17h7M3 20h4M14 20h4"/></svg>
+          <h3>Library in your browser</h3>
+          <p>Folders, thumbnails, a page viewer and search across document names. Works in light and dark, on wide and narrow screens.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/><path d="M8 12c1-3 2-3 3 0s2 2 3-1"/></svg>
+          <h3>Handwriting search and text</h3>
+          <p>Search what you wrote, or convert a notebook to text. Uses the handwriting recogniser built into Windows, fed with your actual pen strokes.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1L3.5 8.5"/><path d="M3.5 4v4.5H8"/><path d="M12 7.5V12l3 2"/></svg>
+          <h3>Version history</h3>
+          <p>Every sync keeps a snapshot. Any earlier version of a document can be restored to the tablet as a copy.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M12 11v6M9.5 14.5L12 17l2.500-2.500"/></svg>
+          <h3>Export</h3>
+          <p>PDF with your ink over the original pages, plain text, or Markdown notes written into a folder of your choice after each sync.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg>
+          <h3>Send to tablet</h3>
+          <p>PDFs, EPUBs, web pages, pictures and a daily agenda page from your calendar, without restarting the tablet's app.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.500" cy="9.500" r="1.500"/><path d="M21 15l-5-5-9 9"/></svg>
+          <h3>Picture import</h3>
+          <p>Remove a plain backdrop, flatten a photo of paper, or cut out the subject with an AI model that runs on your computer.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1-5L16 4l4 4L9 19z"/><path d="M13.500 6.500l4 4"/><path d="M13 20h7"/></svg>
+          <h3>Trace into real pen strokes</h3>
+          <p>Turns a line drawing into a native notebook page of fineliner strokes that you can erase, select and draw over on the tablet.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6.500A1.500 1.500 0 0 1 4.500 5H9l2 2.500h8.500A1.500 1.500 0 0 1 21 9v9.500a1.500 1.500 0 0 1-1.500 1.500h-15A1.500 1.500 0 0 1 3 18.500z"/><path d="M12 11v5M9.500 13.500h5"/></svg>
+          <h3>Organise</h3>
+          <p>New folders, rename, move and trash, straight from the browser.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.500 5l-3 14"/></svg>
+          <h3>Hooks</h3>
+          <p>Run your own command for every document that changes, with the document's name, path and tags passed in.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="tour" class="alt">
+    <div class="wrap">
+      <div class="head">
+        <p class="kicker">A quick tour</p>
+        <h2>See it working</h2>
+        <p>These are screenshots of the app showing a sample library. Select any of them to see it full size.</p>
+      </div>
+
+      <div class="show">
+        <div class="copy">
+          <h3>Handwriting becomes text you can copy</h3>
+          <p>Open a notebook and choose <b>Convert to text</b>. Each page sits beside what was recognised, so it is easy to check one against the other.</p>
+          <ul>
+            <li>Recognition runs on your computer, from the pen strokes themselves.</li>
+            <li>Copy everything, or download it as <code>.txt</code> or <code>.md</code>.</li>
+            <li>Recognition makes mistakes, and needs Windows.</li>
+          </ul>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: convert to text"><img src="img/text.webp" width="2040" height="1275" loading="lazy" alt="A handwritten notebook page titled Shed rebuild on the left, and the same lines as typed text on the right, with Copy all and Download buttons."></button>
+        </figure>
+      </div>
+
+      <div class="show flip">
+        <div class="copy">
+          <h3>Search what you wrote by hand</h3>
+          <p>One search box covers document names, handwriting and typed text. Matching pages are listed with the words highlighted on the page.</p>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: handwriting search"><img src="img/search.webp" width="2040" height="1275" loading="lazy" alt="Search results for the word cedar: two pages, each with the handwritten word cedar highlighted in yellow."></button>
+        </figure>
+      </div>
+
+      <div class="show">
+        <div class="copy">
+          <h3>Go back to any earlier version</h3>
+          <p>A version is kept each time a sync finds changes. Step back through them to see the page as it was, and restore one to the tablet as a copy. The current document is never overwritten.</p>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: version history"><img src="img/history.webp" width="2040" height="1275" loading="lazy" alt="A notebook page shown as it was six days earlier, beside a History panel listing three dated versions and a Restore as a copy button."></button>
+        </figure>
+      </div>
+
+      <div class="show flip">
+        <div class="copy">
+          <h3>Turn a drawing into real ink</h3>
+          <p>Drop a picture onto the library to send it. A line drawing can be traced into pen strokes: it arrives as an ordinary notebook page that you can erase, select and draw over.</p>
+          <ul>
+            <li>Preview the result before anything is sent.</li>
+            <li>For photos: remove a plain backdrop, flatten a photo of paper, or cut out the subject.</li>
+          </ul>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: sending a picture"><img src="img/picture.webp" width="2040" height="1275" loading="lazy" alt="The Send a picture dialog: an original drawing of a sailboat beside a preview of it traced into 3,287 pen strokes."></button>
+        </figure>
+      </div>
+
+      <div class="show">
+        <div class="copy">
+          <h3>Your ink, over the original pages</h3>
+          <p>PDFs are shown with your highlights and margin notes in place. <b>Export PDF</b> gives you one file with the ink laid over the original pages.</p>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: an annotated PDF"><img src="img/pdf.webp" width="2040" height="1275" loading="lazy" alt="A PDF page with two lines highlighted in yellow, a handwritten margin note and a hand-drawn underline."></button>
+        </figure>
+      </div>
+
+      <div class="show flip">
+        <div class="copy">
+          <h3>Today's agenda, ready to write on</h3>
+          <p>Point OpenMarker at a calendar (an <code>.ics</code> file or address) and it sends a page for today: your events with a box to tick, and ruled space for notes.</p>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: an agenda page"><img src="img/agenda.webp" width="2040" height="1275" loading="lazy" alt="An agenda page for Tuesday listing four events, two of them ticked by hand, with handwritten notes on ruled lines below."></button>
+        </figure>
+      </div>
+
+      <div class="pair">
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: the Send to tablet menu"><img src="img/send.webp" width="1650" height="840" loading="lazy" alt="The Send to tablet menu open, offering PDF or EPUB file, Picture, Web page and Today's agenda page."></button>
+          <figcaption>Send a file, a picture, a web page or today's agenda.</figcaption>
+        </figure>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: a folder of sketches"><img src="img/sketches.webp" width="1650" height="1050" loading="lazy" alt="A folder called Sketches holding two traced drawings, a lighthouse and a sailboat."></button>
+          <figcaption>Folders, thumbnails and a live connection status.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <div class="head">
+        <p class="kicker">Install</p>
+        <h2>Up and running in three steps</h2>
+        <p>There is nothing to install on the tablet. OpenMarker runs on your computer.</p>
+      </div>
+      <div class="two">
+        <div>
+          <h3 style="margin-bottom:14px">What you need</h3>
+          <div class="table">
+            <table>
+              <tbody>
+                <tr><td><b>Python</b></td><td>3.12 or newer, on the PATH.</td></tr>
+                <tr><td><b>An <code>ssh</code> client</b></td><td>Included with Windows 10 and later, macOS and Linux.</td></tr>
+                <tr><td><b>Developer mode</b></td><td>Switched on in the tablet's settings. See <a href="#device">Set up your tablet</a>.</td></tr>
+                <tr><td><b>Windows</b></td><td>Only for handwriting search and convert to text. Everything else is plain Python.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="note" style="margin-top:22px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9.500 17h-19z"/><path d="M12 10v4.500M12 17.500v.010"/></svg>
+            <p><b>Early and experimental.</b> It is developed against one device, a Paper Pro on firmware 3.29, on Windows. Other devices, firmware versions and operating systems are untested. It writes to the tablet's storage, so keep cloud sync or another backup of anything you care about.</p>
+          </div>
+        </div>
+        <ol class="steps">
+          <li>
+            <h3>Get the code and start it</h3>
+            <div class="code"><pre><code>git clone https://github.com/MuchDevSuchCode/OpenMarker.git
+cd OpenMarker
+launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></pre></div>
+            <p>The first run creates a private Python environment in <code>.venv</code> and installs OpenMarker into it, which takes a few minutes. After that it starts straight away and opens <code>http://127.0.0.1:8737/</code> in your browser.</p>
+          </li>
+          <li>
+            <h3>Authorise this computer on the tablet</h3>
+            <div class="code"><pre><code>launch setup</code></pre></div>
+            <p>Once only, with the tablet plugged in by USB and awake. The details are in <a href="#device">Set up your tablet</a>.</p>
+          </li>
+          <li>
+            <h3>Press Sync now</h3>
+            <p>Your documents are copied to your computer, indexed for search, and a first snapshot is kept for version history.</p>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section id="device" class="alt">
+    <div class="wrap">
+      <div class="head">
+        <p class="kicker">Set up your tablet</p>
+        <h2>Configuring the device</h2>
+        <p>Three things are needed on the tablet, once. Two more are optional and make daily use nicer.</p>
+      </div>
+
+      <div class="note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9.500 17h-19z"/><path d="M12 10v4.500M12 17.500v.010"/></svg>
+        <p><b>Turning on developer mode resets the tablet.</b> Let cloud sync finish first, and check your documents are safe in the cloud. They come back when you sign in again.</p>
+      </div>
+
+      <ol class="steps">
+        <li>
+          <h3>Turn on developer mode</h3>
+          <p>Developer mode is what lets a computer reach the tablet over SSH. Switch it on in the tablet's settings and follow the prompts. The tablet resets, so wait until cloud sync has finished before you start, then sign in again afterwards and let your documents return.</p>
+        </li>
+        <li>
+          <h3>Find the tablet's SSH password</h3>
+          <p>With developer mode on, the tablet shows its password at:</p>
+          <p class="path">Settings › Help › About › Copyrights and licenses</p>
+          <p>You will type it once, in the next step. OpenMarker never stores it.</p>
+        </li>
+        <li>
+          <h3>Authorise your computer</h3>
+          <p>Plug the tablet in by USB, wake it, and run:</p>
+          <div class="code"><pre><code>launch setup</code></pre></div>
+          <ul>
+            <li>It asks for the tablet's SSH password one time.</li>
+            <li>It creates a key for this computer and installs it on the tablet, so the password is not needed again.</li>
+            <li>The key is kept at <code>openmarker/id_ed25519</code> in your home folder. Treat it like a password.</li>
+            <li>It is safe to run again, for example if the key is ever rejected.</li>
+          </ul>
+          <p>Over USB the tablet is always at the address <code>10.11.99.1</code>. When the sidebar shows <b>Tablet connected · USB</b>, press <b>Sync now</b>.</p>
+        </li>
+        <li>
+          <h3>Allow Wi-Fi <span class="tag">Optional</span></h3>
+          <p>SSH over Wi-Fi is off on the tablet by default. To allow it, run this once while connected by USB:</p>
+          <div class="code"><pre><code>ssh -i ~/openmarker/id_ed25519 root@10.11.99.1 rm-ssh-over-wlan on</code></pre></div>
+          <p>In the Windows Command Prompt, write the key's location this way instead:</p>
+          <div class="code"><pre><code>ssh -i %USERPROFILE%\openmarker\id_ed25519 root@10.11.99.1 rm-ssh-over-wlan on</code></pre></div>
+          <p>After the first connection OpenMarker finds the tablet on your network by the name it announces (mDNS), and follows it when its address changes. If your network blocks that, open <b>Wi-Fi address</b> in the sidebar and type the tablet's address, for example <code>192.168.1.50</code>.</p>
+        </li>
+        <li>
+          <h3>Send without a restart <span class="tag">Optional</span></h3>
+          <p>Switch on <b>USB web interface</b> in the tablet's storage settings. New documents are then handed to the tablet's own upload service and appear while the tablet stays as it is.</p>
+          <p>With it off, OpenMarker writes the files directly and restarts the tablet's app, which blanks and locks the screen for a few seconds. Rename, move, trash and new folder always work that way.</p>
+        </li>
+        <li>
+          <h3>Sync automatically <span class="tag">Optional</span></h3>
+          <p>Tick <b>Sync automatically</b> in the sidebar. While OpenMarker is running it then syncs in the background, and as soon as the tablet appears on USB or Wi-Fi.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="reference">
+    <div class="wrap">
+      <div class="head">
+        <p class="kicker">Reference</p>
+        <h2>Commands, settings and where things live</h2>
+      </div>
+
+      <h3>Command line</h3>
+      <p style="color:var(--muted)">Everything in the browser is also a command. With the launcher, put the command after <code>launch</code>. <code>launch &lt;command&gt; -h</code> lists a command's options.</p>
+      <div class="table">
+        <table>
+          <thead><tr><th>Command</th><th>What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>ui</code></td><td>Open the library in your browser (the default).</td></tr>
+            <tr><td><code>setup</code></td><td>Authorise this computer on the tablet.</td></tr>
+            <tr><td><code>pull</code></td><td>Copy the tablet's documents to the mirror, then index and snapshot.</td></tr>
+            <tr><td><code>ls --mirror</code></td><td>List documents and folders.</td></tr>
+            <tr><td><code>search &lt;words&gt;</code></td><td>Search handwriting and typed text.</td></tr>
+            <tr><td><code>export &lt;document&gt;</code></td><td>Export as PDF; <code>--text</code> for text, <code>--markdown DIR</code> for notes.</td></tr>
+            <tr><td><code>send &lt;file or address&gt;</code></td><td>Send a PDF, EPUB, picture or web page. <code>--as-ink</code> traces a drawing into pen strokes.</td></tr>
+            <tr><td><code>agenda</code></td><td>Send today's agenda page.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Settings</h3>
+      <p style="color:var(--muted)">Settings are kept in <code>openmarker/config.json</code> in your home folder. A full example:</p>
+      <div class="code"><pre><code>{
+  "auto_sync": true,
+  "wifi_host": "192.168.1.50",
+  "calendar": "https://example.com/calendar.ics",
+  "markdown_dir": "D:/Notes",
+  "markdown_tag": "export",
+  "hooks": [{ "run": "python my_script.py" }]
+}</code></pre></div>
+      <div class="table">
+        <table>
+          <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><code>wifi_host</code></td><td>The tablet's last known Wi-Fi address. Kept up to date automatically.</td></tr>
+            <tr><td><code>auto_sync</code></td><td>Sync in the background while OpenMarker is running.</td></tr>
+            <tr><td><code>calendar</code></td><td>An <code>.ics</code> file or address for the agenda page.</td></tr>
+            <tr><td><code>markdown_dir</code></td><td>After each sync, export changed notebooks into this folder.</td></tr>
+            <tr><td><code>markdown_tag</code></td><td>Only export documents carrying this tag.</td></tr>
+            <tr><td><code>hooks</code></td><td>Commands to run for every changed document. Each receives <code>OPENMARKER_DOC_ID</code>, <code>OPENMARKER_NAME</code>, <code>OPENMARKER_PATH</code>, <code>OPENMARKER_TAGS</code> and <code>OPENMARKER_MIRROR</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="sub">Where your data lives</h3>
+      <p style="color:var(--muted)">Everything stays in the <code>openmarker</code> folder in your home directory.</p>
+      <div class="table">
+        <table>
+          <thead><tr><th>Path</th><th>Contents</th></tr></thead>
+          <tbody>
+            <tr><td><code>mirror/</code></td><td>The copy of the tablet's documents.</td></tr>
+            <tr><td><code>history/</code></td><td>Snapshots for version history.</td></tr>
+            <tr><td><code>index.db</code></td><td>Recognised handwriting, for search.</td></tr>
+            <tr><td><code>config.json</code></td><td>Settings.</td></tr>
+            <tr><td><code>id_ed25519</code></td><td>The SSH key that unlocks your tablet. Treat it like a password.</td></tr>
+            <tr><td><code>known_hosts</code></td><td>Your tablet's identity, so nothing else is mistaken for it.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="privacy" class="alt">
+    <div class="wrap two">
+      <div>
+        <p class="kicker">Privacy</p>
+        <h2>Local first, and it means it</h2>
+        <p style="margin-top:16px;color:var(--muted)">The web page is served only to this computer (<code>127.0.0.1</code>) and nothing is sent to any outside service. The exceptions are things you ask for: fetching a web page or calendar you point it at, and a one-time model download (about 180 MB) the first time you use the AI cut-out.</p>
+        <p style="color:var(--muted)">The tablet is recognised by its own key, whatever address it has today, so another device that happens to have the same address is never mistaken for it.</p>
+      </div>
+      <div>
+        <p class="kicker">How it works</p>
+        <h2>No magic, just files</h2>
+        <p style="margin-top:16px;color:var(--muted)">The tablet stores each document as a handful of files named after a random id: its name and folder, its page list, the original PDF or EPUB, and one file of pen strokes per page.</p>
+        <p style="color:var(--muted)">OpenMarker reads that store over SSH, compares file hashes with its mirror, and copies what changed. Pages are drawn from the stroke files, and the same strokes are what the handwriting recogniser reads.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="head">
+        <p class="kicker">Help</p>
+        <h2>Troubleshooting and limits</h2>
+      </div>
+      <div class="two">
+        <div>
+          <details>
+            <summary>The sidebar says “Tablet not connected”</summary>
+            <div><p>Wake the tablet: it drops off the network while asleep. On USB, check the cable carries data and that developer mode is on. On Wi-Fi, check that SSH over Wi-Fi has been allowed (step 4 above) and that the computer and tablet are on the same network.</p></div>
+          </details>
+          <details>
+            <summary>Sync fails, or the key is rejected</summary>
+            <div><p>Run <code>launch setup</code> again with the tablet on USB. It is safe to repeat. A software update or a reset on the tablet can remove the installed key.</p></div>
+          </details>
+          <details>
+            <summary>It doesn't find the tablet on Wi-Fi</summary>
+            <div><p>Some networks block the name lookup (mDNS) that OpenMarker uses. Open <b>Wi-Fi address</b> in the sidebar and type the tablet's address. You can read the address from the tablet's Wi-Fi settings.</p></div>
+          </details>
+          <details>
+            <summary>The tablet's screen blanks when I send something</summary>
+            <div><p>That is the tablet's app restarting. Switch on <b>USB web interface</b> in the tablet's storage settings and new documents arrive without a restart. Rename, move, trash and new folder always restart the app.</p></div>
+          </details>
+          <details>
+            <summary>Handwriting search finds nothing</summary>
+            <div><p>Recognition uses the recogniser built into Windows. On macOS and Linux only typed text is searched. On Windows, sync once so pages are indexed.</p></div>
+          </details>
+        </div>
+        <div>
+          <h3 style="margin-bottom:14px">Known limits</h3>
+          <ul style="margin:0 0 24px;padding-left:1.15em;color:var(--muted)">
+            <li>Typed text on notebook pages is laid out approximately.</li>
+            <li>Traced drawings suit line art, not photographs.</li>
+            <li>Not built yet: custom templates, a cloud-free sync server, live screen view.</li>
+            <li>No licence has been chosen yet, so the usual open-source permissions are not granted until one is added.</li>
+          </ul>
+          <a class="btn" href="https://github.com/MuchDevSuchCode/OpenMarker/issues">Report a problem</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><b>OpenMarker</b> is an independent project. It is not affiliated with, endorsed by or supported by the tablet's manufacturer.</p>
+    <p><a href="https://github.com/MuchDevSuchCode/OpenMarker">Source on GitHub</a> · <a href="#top">Back to top</a></p>
+  </div>
+</footer>
+
+<dialog id="zoom" aria-label="Screenshot, full size"><img alt=""></dialog>
+
+<script>
+  // Mobile menu
+  const menu = document.getElementById("menu"), nav = document.getElementById("site-nav");
+  menu.addEventListener("click", () => menu.setAttribute("aria-expanded", String(nav.classList.toggle("open"))));
+  nav.addEventListener("click", event => { if (event.target.closest("a")) { nav.classList.remove("open"); menu.setAttribute("aria-expanded", "false"); } });
+
+  // Screenshots open full size
+  const zoom = document.getElementById("zoom"), big = zoom.querySelector("img");
+  document.querySelectorAll(".shot button").forEach(button => button.addEventListener("click", () => {
+    const img = button.querySelector("img");
+    big.src = img.currentSrc || img.src; big.alt = img.alt;
+    zoom.showModal();
+  }));
+  zoom.addEventListener("click", () => zoom.close());
+
+  // Copy buttons on code blocks
+  document.querySelectorAll(".code").forEach(block => {
+    const button = document.createElement("button");
+    button.type = "button"; button.textContent = "Copy";
+    button.addEventListener("click", async () => {
+      const text = [...block.querySelector("code").childNodes].filter(n => !(n.classList && n.classList.contains("dim"))).map(n => n.textContent).join("")
+        .split("\n").map(line => line.trimEnd()).filter((line, i, all) => line || (all[i - 1] && all[i + 1])).join("\n").trim();
+      try { await navigator.clipboard.writeText(text); button.textContent = "Copied"; } catch { button.textContent = "Select and copy"; }
+      setTimeout(() => { button.textContent = "Copy"; }, 1600);
+    });
+    block.append(button);
+  });
+</script>
+</body>
+</html>
