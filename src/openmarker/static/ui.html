@@ -46,11 +46,8 @@
   .btn { width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); font-weight: 600; }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   .btn:disabled { opacity: .5; cursor: default; }
-  .linkish { border: 0; background: none; padding: 0; color: var(--muted); font-size: 12.5px; text-decoration: underline; margin-top: 10px; }
-  .wifi { display: none; gap: 6px; margin-top: 8px; }
-  .wifi.open { display: flex; }
-  .wifi input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); font-size: 13px; }
-  .wifi button { padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); font-size: 13px; }
+  .btn.quiet { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; font-weight: 500; }
+  .btn.quiet svg { opacity: .75; }
   .notice { margin-top: 10px; font-size: 12.5px; color: var(--muted); }
   .notice code { background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 
@@ -106,7 +103,38 @@
   .card:hover .more, .more:focus-visible { opacity: 1; }
   .section { grid-column: 1 / -1; font: 600 13px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 8px; }
   .snippet { font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+
+  /* Settings */
+  dialog.sheet.settings { width: min(680px, 94vw); padding: 0; overflow: hidden; }
+  .settings form { display: flex; flex-direction: column; max-height: calc(100dvh - 34px); }
+  .settings-head { display: flex; align-items: center; gap: 9px; padding: 20px 24px 16px; border-bottom: 1px solid var(--line); }
+  .settings-head h3 { margin: 0; flex: 1; font-size: 21px; }
+  .settings-head .state { color: var(--muted); font-size: 13px; }
+  .settings-body { overflow: auto; padding: 4px 24px 8px; }
+  .set-group { padding: 18px 0 6px; border-bottom: 1px solid var(--line); }
+  .set-group:last-child { border-bottom: 0; }
+  .set-group h4 { margin: 0 0 4px; font: 600 12px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  .set-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px 22px; align-items: center; padding: 11px 0; }
+  .set-row b { display: block; font-weight: 600; }
+  .set-row small { display: block; margin-top: 2px; color: var(--muted); font-size: 12.5px; line-height: 1.4; }
+  .set-row.inline { grid-template-columns: minmax(0, 1fr) auto; }
+  .set-row code { background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 1px 5px; border-radius: 4px; font-size: 12px; overflow-wrap: anywhere; }
+  .set-row .value { color: var(--muted); font-size: 13.5px; text-align: right; overflow-wrap: anywhere; }
+  .affix { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
+  .affix:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sheet .affix input { border: 0; background: none; min-width: 0; outline: 0; }
+  .affix span { padding-right: 11px; color: var(--muted); }
+  .sheet input.switch { appearance: none; -webkit-appearance: none; flex: none; width: 46px; height: 26px; min-height: 0; padding: 0; border: 0; border-radius: 999px; background: color-mix(in srgb, var(--ink) 22%, var(--line)); position: relative; cursor: pointer; transition: background .15s ease; }
+  .sheet input.switch::before { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s ease; }
+  .sheet input.switch:checked { background: var(--accent); }
+  .sheet input.switch:checked::before { transform: translateX(20px); }
+  .settings-foot { display: flex; align-items: center; gap: 8px; padding: 14px 24px; border-top: 1px solid var(--line); }
+  .settings-foot .error { flex: 1; color: var(--accent); font-size: 13.5px; }
+  @media (max-width: 600px) {
+    .settings-head, .settings-body, .settings-foot { padding-left: 16px; padding-right: 16px; }
+    .set-row { grid-template-columns: minmax(0, 1fr); }
+    .set-row .value { text-align: left; }
+  }
   .drop main { outline: 3px dashed var(--accent); outline-offset: -14px; }
   .stack { position: relative; border-radius: 4px; box-shadow: var(--shadow); overflow: hidden; background: #fff; }
   .pages .stack img { box-shadow: none; border-radius: 0; background: none; }
@@ -212,12 +240,7 @@
     <small id="last">&nbsp;</small>
     <button class="btn primary" id="sync" disabled>Sync now</button>
     <div class="notice" id="notice" hidden></div>
-    <label class="check"><input type="checkbox" id="auto"> Sync automatically</label>
-    <button class="linkish" id="wifi-toggle">Wi-Fi address</button>
-    <form class="wifi" id="wifi">
-      <input id="wifi-host" placeholder="e.g. 192.168.1.50" aria-label="Tablet Wi-Fi address" autocomplete="off">
-      <button>Save</button>
-    </form>
+    <button class="btn quiet" id="open-settings" aria-haspopup="dialog"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>Settings</button>
   </div>
 </aside>
 
@@ -308,6 +331,52 @@
     <div class="row">
       <button class="pill" value="cancel" formnovalidate>Cancel</button>
       <button class="pill accent" value="ok" id="image-send">Send to tablet</button>
+    </div>
+  </form>
+</dialog>
+<dialog class="sheet settings" id="settings" aria-labelledby="settings-title">
+  <form id="settings-form">
+    <div class="settings-head">
+      <h3 id="settings-title">Settings</h3>
+      <span class="dot" id="set-dot"></span><span class="state" id="set-conn"></span>
+    </div>
+    <div class="settings-body">
+      <section class="set-group">
+        <h4>Connection</h4>
+        <label class="set-row"><span><b>Wi-Fi address</b><small>Where to reach the tablet when USB is unplugged. Kept up to date automatically once the tablet has been found.</small></span>
+          <input id="set-wifi" placeholder="e.g. 192.168.1.50" autocomplete="off" spellcheck="false" maxlength="253"></label>
+        <label class="set-row"><span><b>Tablet name</b><small>The name the tablet announces on your network (mDNS). It is used to find the tablet again when its address changes, and is learned the first time the tablet connects.</small></span>
+          <span class="affix"><input id="set-name" placeholder="learned automatically" autocomplete="off" spellcheck="false" maxlength="70"><span>.local</span></span></label>
+      </section>
+      <section class="set-group">
+        <h4>Sync</h4>
+        <label class="set-row inline"><span><b>Sync automatically</b><small>Sync in the background while OpenMarker is running, and as soon as the tablet appears.</small></span>
+          <input type="checkbox" class="switch" id="set-auto" role="switch"></label>
+      </section>
+      <section class="set-group">
+        <h4>Agenda page</h4>
+        <label class="set-row"><span><b>Calendar</b><small>An .ics file or address. Its events for the day are listed on “Today's agenda page”.</small></span>
+          <input id="set-calendar" placeholder="https://…/calendar.ics" autocomplete="off" spellcheck="false" maxlength="2048"></label>
+      </section>
+      <section class="set-group">
+        <h4>Markdown export</h4>
+        <label class="set-row"><span><b>Folder</b><small>After each sync, notebooks that changed are written here as Markdown notes. Leave empty to turn this off.</small></span>
+          <input id="set-md-dir" placeholder="e.g. D:/Notes" autocomplete="off" spellcheck="false" maxlength="1024"></label>
+        <label class="set-row"><span><b>Only with tag</b><small>Export only documents carrying this tag. Leave empty to export every changed notebook.</small></span>
+          <input id="set-md-tag" placeholder="e.g. export" autocomplete="off" spellcheck="false" maxlength="100"></label>
+      </section>
+      <section class="set-group">
+        <h4>On this computer</h4>
+        <div class="set-row"><span><b>Data folder</b><small>The mirror, version history, search index and settings file.</small></span><span class="value"><code id="set-folder"></code></span></div>
+        <div class="set-row inline"><span><b>Handwriting search</b></span><span class="value" id="set-ocr"></span></div>
+        <div class="set-row inline"><span><b>AI picture cut-out</b></span><span class="value" id="set-cutout"></span></div>
+        <div class="set-row inline"><span><b>Hooks</b><small>Commands run for each changed document. Edit <code>config.json</code> to change them.</small></span><span class="value" id="set-hooks"></span></div>
+      </section>
+    </div>
+    <div class="settings-foot">
+      <span class="error" id="set-error" role="alert"></span>
+      <button type="button" class="pill" id="set-cancel">Cancel</button>
+      <button class="pill accent" id="set-save">Save</button>
     </div>
   </form>
 </dialog>
@@ -631,8 +700,7 @@ async function loadStatus() {
   $("conn").textContent = s.connected ? `Tablet connected · ${s.via}` : "Tablet not connected";
   $("last").textContent = s.last_sync ? `Last synced ${ago(s.last_sync)}` : "Not synced yet";
   $("sync").disabled = !s.connected || !s.set_up || $("sync").dataset.busy === "1";
-  if (document.activeElement !== $("wifi-host")) $("wifi-host").value = s.wifi_host;
-  $("auto").checked = s.auto_sync;
+  showConnection();
   $("image-subject").disabled = !s.subject_cutout;
   for (const id of ["send", "new-folder"]) $(id).disabled = !s.connected || !s.set_up;
   if (s.last_sync && state.lastSync && s.last_sync !== state.lastSync) loadLibrary();  // a background sync finished
@@ -655,11 +723,43 @@ $("sync").onclick = async () => {
   }
   loadStatus();
 };
-$("wifi-toggle").onclick = () => $("wifi").classList.toggle("open");
-$("wifi").onsubmit = async event => {
+
+// Settings: one sheet for everything in config.json that is safe to change here.
+function showConnection() {
+  const s = state.status;
+  $("set-dot").classList.toggle("on", Boolean(s?.connected));
+  $("set-conn").textContent = s?.connected ? `Tablet connected · ${s.via}` : "Tablet not connected";
+}
+$("open-settings").onclick = async () => {
+  const c = await api("/api/config");
+  $("set-wifi").value = c.wifi_host;
+  $("set-name").value = c.tablet_name;
+  $("set-auto").checked = c.auto_sync;
+  $("set-calendar").value = c.calendar;
+  $("set-md-dir").value = c.markdown_dir;
+  $("set-md-tag").value = c.markdown_tag;
+  $("set-folder").textContent = c.folder;
+  $("set-ocr").textContent = c.handwriting_search ? "Available" : "Needs Windows";
+  $("set-cutout").textContent = c.subject_cutout ? "Installed" : "Not installed";
+  $("set-hooks").textContent = c.hooks ? `${c.hooks} command${c.hooks === 1 ? "" : "s"}` : "None";
+  $("set-error").textContent = "";
+  showConnection();
+  $("sidebar").classList.remove("expanded"); $("nav-toggle").setAttribute("aria-expanded", "false");
+  $("settings").showModal();
+};
+$("set-cancel").onclick = () => $("settings").close();
+$("settings-form").oninput = () => { $("set-error").textContent = ""; };
+$("settings-form").onsubmit = async event => {
   event.preventDefault();
-  const result = await api("/api/config", { wifi_host: $("wifi-host").value });
-  toast(result.ok ? "Wi-Fi address saved" : result.error);
+  $("set-save").disabled = true;
+  const result = await api("/api/config", {
+    wifi_host: $("set-wifi").value, tablet_name: $("set-name").value, auto_sync: $("set-auto").checked,
+    calendar: $("set-calendar").value, markdown_dir: $("set-md-dir").value, markdown_tag: $("set-md-tag").value,
+  }).catch(error => ({ ok: false, error: error.message }));
+  $("set-save").disabled = false;
+  if (!result.ok) { $("set-error").textContent = result.error || "Couldn't save the settings."; return; }
+  $("settings").close();
+  toast("Settings saved");
   loadStatus();
 };
 let searchTimer;
@@ -797,11 +897,6 @@ $("restore").onclick = async () => {
   const item = viewed();
   const sure = await ask({ title: "Restore this version?", text: "It is added to the tablet as a new copy. The current document is not changed.", ok: "Restore as a copy" });
   if (sure) act("Restoring a copy to the tablet…", () => api("/api/restore", { id: item.id, snapshot: state.version }), "Restored as a copy");
-};
-$("auto").onchange = async event => {
-  const checked = event.target.checked;
-  try { const result = await api("/api/config", { auto_sync: checked }); if (!result.ok) throw new Error(result.error); }
-  catch (error) { $("auto").checked = !checked; toast(error.message); }
 };
 $("close").onclick = () => $("viewer").close();
 $("viewer").addEventListener("close", () => { if (location.hash.startsWith("#doc/")) location.hash = state.folder; });

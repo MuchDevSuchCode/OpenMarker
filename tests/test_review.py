@@ -58,5 +58,42 @@ class RequestTests(unittest.TestCase):
         update.assert_called_once_with(auto_sync=False)
 
 
+class SettingsTests(unittest.TestCase):
+    def test_values_are_trimmed_and_empty_ones_removed(self):
+        changes = server.settings_changes({
+            "wifi_host": " 192.168.1.50 ", "tablet_name": "my-tablet.local", "calendar": "",
+            "markdown_dir": "", "markdown_tag": " export ",
+        })
+        self.assertEqual(changes, {
+            "wifi_host": "192.168.1.50", "tablet_name": "my-tablet", "calendar": None,
+            "markdown_dir": None, "markdown_tag": "export",
+        })
+
+    def test_only_settings_that_were_sent_change(self):
+        self.assertEqual(server.settings_changes({"auto_sync": True}), {"auto_sync": True})
+        self.assertEqual(server.settings_changes({"hooks": [{"run": "x"}], "last_sync": "x"}), {})
+
+    def test_bad_values_are_refused(self):
+        for body in (
+            {"wifi_host": "not an address"},
+            {"tablet_name": "two words"},
+            {"tablet_name": 5},
+            {"calendar": "line\nbreak"},
+            {"markdown_dir": "relative/folder"},
+            {"markdown_tag": "x" * 101},
+        ):
+            with self.assertRaises(server.UserError, msg=body):
+                server.settings_changes(body)
+
+    def test_removed_settings_leave_the_file(self):
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            path = Path(directory) / "config.json"
+            with patch.object(server.workflow, "config_path", return_value=path):
+                server.workflow.update_config(calendar="a.ics", auto_sync=True)
+                server.workflow.update_config(calendar=None, markdown_tag=None)
+                self.assertEqual(json.loads(path.read_text()), {"auto_sync": True})
+                self.assertEqual(server.settings_json()["calendar"], "")
+
+
 if __name__ == "__main__":
     unittest.main()

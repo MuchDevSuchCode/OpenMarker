@@ -492,7 +492,7 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
           <div class="code"><pre><code>ssh -i ~/openmarker/id_ed25519 root@10.11.99.1 rm-ssh-over-wlan on</code></pre></div>
           <p>In the Windows Command Prompt, write the key's location this way instead:</p>
           <div class="code"><pre><code>ssh -i %USERPROFILE%\openmarker\id_ed25519 root@10.11.99.1 rm-ssh-over-wlan on</code></pre></div>
-          <p>After the first connection OpenMarker finds the tablet on your network by the name it announces (mDNS), and follows it when its address changes. If your network blocks that, open <b>Wi-Fi address</b> in the sidebar and type the tablet's address, for example <code>192.168.1.50</code>.</p>
+          <p>After the first connection OpenMarker finds the tablet on your network by the name it announces (mDNS), and follows it when its address changes. If your network blocks that, open <b>Settings</b> in the sidebar and type the tablet's address into <b>Wi-Fi address</b>, for example <code>192.168.1.50</code>. The name it looks for is shown there too, as <b>Tablet name</b>.</p>
         </li>
         <li>
           <h3>Send without a restart <span class="tag">Optional</span></h3>
@@ -501,9 +501,25 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
         </li>
         <li>
           <h3>Sync automatically <span class="tag">Optional</span></h3>
-          <p>Tick <b>Sync automatically</b> in the sidebar. While OpenMarker is running it then syncs in the background, and as soon as the tablet appears on USB or Wi-Fi.</p>
+          <p>Open <b>Settings</b> in the sidebar and switch on <b>Sync automatically</b>. While OpenMarker is running it then syncs in the background, and as soon as the tablet appears on USB or Wi-Fi.</p>
         </li>
       </ol>
+
+      <div class="show" style="margin-top:clamp(40px,6vw,72px)">
+        <div class="copy">
+          <h3>Everything in one Settings sheet</h3>
+          <p>The options that matter day to day are together in <b>Settings</b>, at the bottom of the sidebar:</p>
+          <ul>
+            <li><b>Connection:</b> the tablet's Wi-Fi address and the name it announces on your network.</li>
+            <li><b>Sync:</b> sync automatically in the background.</li>
+            <li><b>Agenda page:</b> the calendar to read events from.</li>
+            <li><b>Markdown export:</b> the folder to write notes into, and an optional tag.</li>
+          </ul>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: the Settings sheet"><img src="img/settings.webp" width="2040" height="1275" loading="lazy" alt="The Settings sheet, with sections for Connection, Sync, Agenda page and Markdown export, and a Save button."></button>
+        </figure>
+      </div>
     </div>
   </section>
 
@@ -533,10 +549,11 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
       </div>
 
       <h3 class="sub">Settings</h3>
-      <p style="color:var(--muted)">Settings are kept in <code>openmarker/config.json</code> in your home folder. A full example:</p>
+      <p style="color:var(--muted)">Most of these can be changed in <b>Settings</b> in the app. They are kept in <code>openmarker/config.json</code> in your home folder. A full example:</p>
       <div class="code"><pre><code>{
   "auto_sync": true,
   "wifi_host": "192.168.1.50",
+  "tablet_name": "my-tablet",
   "calendar": "https://example.com/calendar.ics",
   "markdown_dir": "D:/Notes",
   "markdown_tag": "export",
@@ -547,6 +564,7 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
           <thead><tr><th>Key</th><th>Meaning</th></tr></thead>
           <tbody>
             <tr><td><code>wifi_host</code></td><td>The tablet's last known Wi-Fi address. Kept up to date automatically.</td></tr>
+            <tr><td><code>tablet_name</code></td><td>The name the tablet announces on the network. It is looked up as <code>name.local</code> when the address changes, and learned on first connection.</td></tr>
             <tr><td><code>auto_sync</code></td><td>Sync in the background while OpenMarker is running.</td></tr>
             <tr><td><code>calendar</code></td><td>An <code>.ics</code> file or address for the agenda page.</td></tr>
             <tr><td><code>markdown_dir</code></td><td>After each sync, export changed notebooks into this folder.</td></tr>
@@ -609,7 +627,7 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
           </details>
           <details>
             <summary>It doesn't find the tablet on Wi-Fi</summary>
-            <div><p>Some networks block the name lookup (mDNS) that OpenMarker uses. Open <b>Wi-Fi address</b> in the sidebar and type the tablet's address. You can read the address from the tablet's Wi-Fi settings.</p></div>
+            <div><p>Some networks block the name lookup (mDNS) that OpenMarker uses. Open <b>Settings</b> and type the tablet's address into <b>Wi-Fi address</b>. You can read the address from the tablet's Wi-Fi settings.</p></div>
           </details>
           <details>
             <summary>The tablet's screen blanks when I send something</summary>

@@ -32,6 +32,9 @@ ROUTES = {
 SNAPSHOT = re.compile(r"\d{8}T\d{12}Z")
 UI_FILE = Path(__file__).parent / "static" / "ui.html"
 _sync_lock = threading.Lock()
+# The PDF renderer is not safe to use from two threads at once: pages asked
+# for at the same moment would crash the whole server.
+_pdf_lock = threading.Lock()
 
 
 class UserError(Exception):
@@ -101,6 +104,63 @@ def status() -> dict:
     }
 
 
+def settings_json() -> dict:
+    """Everything the Settings sheet shows."""
+    config = workflow.load_config()
+    hooks = config.get("hooks")
+    return {
+        "wifi_host": config.get("wifi_host") or "",
+        "tablet_name": config.get("tablet_name") or "",
+        "auto_sync": bool(config.get("auto_sync")),
+        "calendar": config.get("calendar") or "",
+        "markdown_dir": config.get("markdown_dir") or "",
+        "markdown_tag": config.get("markdown_tag") or "",
+        "hooks": len(hooks) if isinstance(hooks, list) else 0,
+        "folder": str(workflow.config_path().parent),
+        "handwriting_search": ocr.available(),
+        "subject_cutout": images.subject_available(),
+    }
+
+
+def _setting(body: dict, key: str, label: str, limit: int) -> str:
+    value = body[key]
+    if not isinstance(value, str):
+        raise UserError(f"{label} must be text.")
+    value = value.strip()
+    if len(value) > limit or any(ord(c) < 32 for c in value):
+        raise UserError(f"{label} is too long or has characters that can't be used.")
+    return value
+
+
+def settings_changes(body: dict) -> dict:
+    """Check the settings in a request. Returns what to store; None means "remove"."""
+    changes: dict = {}
+    if "wifi_host" in body:
+        host = _setting(body, "wifi_host", "Wi-Fi address", 253)
+        if host and not re.fullmatch(r"[A-Za-z0-9.\-]{1,253}", host):
+            raise UserError("That address doesn't look right.")
+        changes["wifi_host"] = host
+    if "tablet_name" in body:
+        name = _setting(body, "tablet_name", "Tablet name", 70).removesuffix(".local")
+        if name and not re.fullmatch(r"[A-Za-z0-9-]{1,63}", name):
+            raise UserError("A tablet name has only letters, digits and hyphens.")
+        changes["tablet_name"] = name or None
+    if "auto_sync" in body:
+        if not isinstance(body["auto_sync"], bool):
+            raise UserError("Automatic sync must be true or false.")
+        changes["auto_sync"] = body["auto_sync"]
+    if "calendar" in body:
+        changes["calendar"] = _setting(body, "calendar", "Calendar", 2048) or None
+    if "markdown_dir" in body:
+        folder = _setting(body, "markdown_dir", "Markdown folder", 1024)
+        if folder and not Path(folder).expanduser().is_absolute():
+            raise UserError("Give the Markdown folder as a full path, such as D:/Notes.")
+        changes["markdown_dir"] = folder or None
+    if "markdown_tag" in body:
+        changes["markdown_tag"] = _setting(body, "markdown_tag", "Tag", 100) or None
+    return changes
+
+
 def library_json() -> dict:
     store, source = store_dir()
     out = []
@@ -136,27 +196,29 @@ def library_json() -> dict:
 def _source_png(path: str, mtime: float, number: int) -> bytes:
     import pypdfium2
 
-    document = pypdfium2.PdfDocument(path)
-    try:
-        page = document[number]
-        width, _ = page.get_size()
-        image = page.render(scale=min(2.0, 1400 / width)).to_pil()
-        buffer = io.BytesIO()
-        image.save(buffer, "PNG")
-        return buffer.getvalue()
-    finally:
-        document.close()
+    with _pdf_lock:
+        document = pypdfium2.PdfDocument(path)
+        try:
+            page = document[number]
+            width, _ = page.get_size()
+            image = page.render(scale=min(2.0, 1400 / width)).to_pil()
+        finally:
+            document.close()
+    buffer = io.BytesIO()
+    image.save(buffer, "PNG")
+    return buffer.getvalue()
 
 
 @lru_cache(maxsize=64)
 def _source_size(path: str, mtime: float, number: int) -> tuple[float, float]:
     import pypdfium2
 
-    document = pypdfium2.PdfDocument(path)
-    try:
-        return document[number].get_size()
-    finally:
-        document.close()
+    with _pdf_lock:
+        document = pypdfium2.PdfDocument(path)
+        try:
+            return document[number].get_size()
+        finally:
+            document.close()
 
 
 @lru_cache(maxsize=256)
@@ -403,6 +465,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(library_json())
         elif path == "/api/status":
             self._json(status())
+        elif path == "/api/config":
+            self._json(settings_json())
         elif path == "/api/search":
             self._json(search_json(query.get("q", [""])[0]))
         elif m := match["page"]:
@@ -493,19 +557,7 @@ class Handler(BaseHTTPRequestHandler):
             elif action == "sync":
                 self._json(sync())
             elif action == "config":
-                changes = {}
-                if "wifi_host" in body:
-                    if not isinstance(body["wifi_host"], str):
-                        raise UserError("Wi-Fi address must be text.")
-                    host = body["wifi_host"].strip()
-                    if host and not re.fullmatch(r"[A-Za-z0-9.\-]{1,253}", host):
-                        raise UserError("That address doesn't look right.")
-                    changes["wifi_host"] = host
-                if "auto_sync" in body:
-                    if not isinstance(body["auto_sync"], bool):
-                        raise UserError("Automatic sync must be true or false.")
-                    changes["auto_sync"] = body["auto_sync"]
-                workflow.update_config(**changes)
+                workflow.update_config(**settings_changes(body))
                 self._json({"ok": True})
             else:
                 self._json(change(action, body, raw, parse_qs(url.query)))

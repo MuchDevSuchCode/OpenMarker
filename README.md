@@ -92,8 +92,8 @@ ssh -i ~/openmarker/id_ed25519 root@10.11.99.1 rm-ssh-over-wlan on
 ```
 
 After the first connection OpenMarker finds the tablet on your network by the
-name it announces (mDNS). If your network blocks that, type the tablet's
-address into the Wi-Fi field in the sidebar.
+name it announces (mDNS). If your network blocks that, open **Settings** in
+the sidebar and type the tablet's address into **Wi-Fi address**.
 
 ### Sending without a restart
 
@@ -135,11 +135,13 @@ Everything stays in the `openmarker` folder in your home directory:
 | `id_ed25519` | The SSH key that unlocks your tablet. Treat it like a password. |
 | `known_hosts` | Your tablet's identity, so nothing else is mistaken for it. |
 
-Settings in `config.json`:
+Most settings can be changed in **Settings** in the sidebar; hooks are edited
+in the file. Settings in `config.json`:
 
 | Key | Meaning |
 | --- | --- |
 | `wifi_host` | The tablet's last known Wi-Fi address. Kept up to date automatically. |
+| `tablet_name` | The name the tablet announces on the network. Looked up as `<name>.local` when the address changes; learned on first connection. |
 | `auto_sync` | Sync in the background while OpenMarker is running. |
 | `calendar` | An `.ics` file or address for the agenda page. |
 | `markdown_dir` | After each sync, export changed notebooks into this folder. |

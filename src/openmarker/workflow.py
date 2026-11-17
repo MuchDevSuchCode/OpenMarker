@@ -3,6 +3,9 @@
 Settings live in `~/openmarker/config.json`:
 
     "wifi_host": "192.168.1.50"  the tablet's Wi-Fi address, used when USB is unplugged
+    "tablet_name": "my-tablet"
+                                 the name the tablet announces on the network; it is
+                                 looked up as <name>.local when its address changes
     "auto_sync": true            sync in the background while the UI is running
     "calendar": "https://…/basic.ics"
                                  calendar (.ics file or address) for the agenda page
@@ -42,8 +45,13 @@ def save_config(config: dict) -> None:
 
 
 def update_config(**changes) -> dict:
+    """Change settings. A value of None removes the setting."""
     config = load_config()
-    config.update(changes)
+    for key, value in changes.items():
+        if value is None:
+            config.pop(key, None)
+        else:
+            config[key] = value
     save_config(config)
     return config
 
