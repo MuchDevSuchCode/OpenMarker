@@ -30,7 +30,7 @@ ROUTES = {
     "text": re.compile(rf"^/api/text/({UUID})\.(json|txt|md)$"),
 }
 SNAPSHOT = re.compile(r"\d{8}T\d{12}Z")
-UI_FILE = Path(__file__).with_name("ui.html")
+UI_FILE = Path(__file__).parent / "static" / "ui.html"
 _sync_lock = threading.Lock()
 
 

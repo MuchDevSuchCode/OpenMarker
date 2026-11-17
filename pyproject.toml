@@ -2,6 +2,7 @@
 name = "openmarker"
 version = "0.1.0"
 description = "OpenMarker: an open, local-first companion for e-ink paper tablets"
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "rmscene>=0.8",
@@ -10,6 +11,10 @@ dependencies = [
     "pypdfium2>=4",
     "icalendar>=5",
     "recurring-ical-events>=2",
+    "Pillow>=10",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "scikit-image>=0.22",
     # Handwriting recognition uses the recogniser built into Windows.
     "winrt-runtime; sys_platform == 'win32'",
     "winrt-Windows.Foundation; sys_platform == 'win32'",
@@ -20,6 +25,10 @@ dependencies = [
 [project.optional-dependencies]
 # Cutting the subject out of photos with a local segmentation model.
 ai = ["rembg[cpu]>=2.0"]
+dev = ["pytest>=8"]
+
+[project.urls]
+Repository = "https://github.com/MuchDevSuchCode/OpenMarker"
 
 [project.scripts]
 openmarker = "openmarker.__main__:main"
@@ -28,8 +37,12 @@ openmarker = "openmarker.__main__:main"
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["openmarker"]
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools.package-data]
-openmarker = ["ui.html"]
+openmarker = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
