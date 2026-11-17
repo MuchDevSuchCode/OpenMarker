@@ -120,6 +120,29 @@
   .sheet .ai-note { font-size: 12.5px; margin: 14px 0 0; }
   .ai-actions { margin: 0; padding-left: 1.2em; line-height: 1.6; user-select: text; }
   .ai-sources { display: flex; flex-wrap: wrap; gap: 8px; }
+  /* Chat */
+  dialog.sheet.chat { padding: 0; width: min(780px, 94vw); height: min(780px, calc(100dvh - 32px)); overflow: hidden; }
+  dialog.sheet.chat[open] { display: flex; flex-direction: column; }
+  .chat-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .chat-head h3 { margin: 0 auto 0 0; }
+  .chat-head label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  .sheet .chat-head select { width: auto; max-width: 230px; padding: 7px 9px; }
+  .chat-log { flex: 1; min-height: 0; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .chat-msg { max-width: 88%; }
+  .chat-msg.user { align-self: flex-end; padding: 9px 14px; border-radius: 14px 14px 4px 14px; background: color-mix(in srgb, var(--accent) 13%, var(--surface)); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+  .chat-msg.assistant { align-self: flex-start; }
+  .chat-msg .ai-out { overflow-wrap: anywhere; }
+  .chat-msg .ai-out.waiting { color: var(--muted); font-style: italic; }
+  .chat-msg .ai-sources { margin-top: 8px; }
+  .chat-msg .ai-sources .pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .chat-tools { display: flex; gap: 14px; margin-top: 8px; }
+  .chat-tools button { border: 0; background: none; padding: 0; min-height: 0; color: var(--muted); font-size: 12.5px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .chat-tools button:disabled { opacity: .5; cursor: default; }
+  .chat-empty { margin: auto; text-align: center; max-width: 440px; }
+  .chat-empty .ai-sources { justify-content: center; margin-top: 14px; }
+  .chat-form { display: flex; gap: 10px; align-items: flex-end; padding: 12px 18px 8px; border-top: 1px solid var(--line); }
+  .chat-form textarea { flex: 1; min-width: 0; resize: none; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: inherit; font: inherit; line-height: 1.4; max-height: 160px; }
+  .sheet .chat-foot { margin: 0; padding: 0 18px 12px; font-size: 12px; }
   .pick { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; }
   .sheet .pick input { width: auto; margin-top: 4px; accent-color: var(--accent); }
   .pick b { display: block; font-weight: 600; }
@@ -282,7 +305,7 @@
       <div class="menu" id="ai-menu" hidden>
         <button class="pill" id="ai" aria-haspopup="true">✦ AI</button>
         <div class="menu-list">
-          <button id="ai-ask">Ask your notes…</button>
+          <button id="ai-ask">Chat with your notes…</button>
           <button id="ai-tidy">Suggest names and folders</button>
         </div>
       </div>
@@ -448,6 +471,20 @@
       <button class="pill accent" id="set-save">Save</button>
     </div>
   </form>
+</dialog>
+<dialog class="sheet chat" id="chat" aria-labelledby="chat-title">
+  <div class="chat-head">
+    <h3 id="chat-title">Chat with your notes</h3>
+    <label>About <select id="chat-scope" aria-label="What the chat reads"></select></label>
+    <button class="pill" id="chat-new">New chat</button>
+    <button class="pill" id="chat-close">Close</button>
+  </div>
+  <div class="chat-log" id="chat-log" aria-live="polite"></div>
+  <form class="chat-form" id="chat-form">
+    <textarea id="chat-input" rows="2" maxlength="8000" placeholder="Ask about your notes" aria-label="Your message"></textarea>
+    <button class="pill accent" id="chat-send">Send</button>
+  </form>
+  <p class="chat-foot">Reads the recognised text of the notes chosen above and sends it, with this conversation, to the Claude API. The conversation is not saved: it is gone when you start a new chat or reload the page.</p>
 </dialog>
 <dialog class="sheet wide" id="ai-sheet" aria-labelledby="ai-title">
   <h3 id="ai-title"></h3>
@@ -680,7 +717,7 @@ function itemMenu(item) {
   const withAI = state.status?.ai ? ["-",
     !item.folder && ["✦ Summarise and list actions", () => summarise(item)],
     !item.folder && ["✦ Read the handwriting with AI", () => improveText(item)],
-    [item.folder ? "✦ Ask about this folder…" : "✦ Ask about this document…", () => askNotes("", item)],
+    [item.folder ? "✦ Ask about this folder…" : "✦ Ask about this document…", () => openChat(item)],
     item.folder && ["✦ Suggest names and folders", () => tidy(item.id)],
   ] : [];
   return [
@@ -711,7 +748,7 @@ function placeMenu(folder) {
     ["Send a picture…", send("send-image"), { disabled }],
     ["Send a web page…", send("send-url"), { disabled }],
     ...(state.status?.ai ? ["-",
-      folder ? ["✦ Ask about this folder…", () => askNotes("", state.byId.get(folder))] : ["✦ Ask your notes…", () => askNotes("")],
+      folder ? ["✦ Ask about this folder…", () => openChat(state.byId.get(folder))] : ["✦ Chat with your notes…", () => openChat(null)],
       ["✦ Suggest names and folders", () => tidy(folder)],
     ] : []),
     "-",
@@ -743,7 +780,7 @@ function renderGrid() {
   grid.replaceChildren(...sorted(list).map(card));
   if (query.length > 2 && state.status?.ai) {
     grid.prepend(el("div", { className: "ai-row" },
-      el("button", { className: "pill", textContent: `✦ Ask AI: “${state.query}”`, onclick: () => askNotes(state.query) })));
+      el("button", { className: "pill", textContent: `✦ Ask AI: “${state.query}”`, onclick: () => openChat(null, state.query) })));
   }
   if (query && state.hits.length) {
     grid.append(el("div", { className: "section", textContent: "Found in handwriting and text" }), ...state.hits.map(hitCard));
@@ -1171,21 +1208,129 @@ async function improveText(item) {
   toast(r.left ? `Read ${r.done} pages; ${r.left} more to go. Press it again to continue.`
     : r.done ? `Read ${r.done} page${r.done === 1 ? "" : "s"} with AI` : "Every page was already read with AI.");
 }
-async function askNotes(question, within) {  // within: only this document or folder
-  const title = within ? `Ask about “${within.name}”` : "Ask your notes";
-  if (!question) question = await ask({ title, text: within ? `The answer comes from the recognised text of this ${within.folder ? "folder" : "document"}.` : "The answer comes from the recognised text of your notebooks.", value: "", ok: "Ask" });
-  if (!question) return;
-  const r = await aiRun(title, "Reading your notes…", "/api/ai/ask", { question, within: within?.id || "" });
-  if (!r) return;
-  aiSheet(question, [
-    para("ai-out", r.answer),
-    r.sources.length ? el("h4", { textContent: "From" }) : null,
-    r.sources.length ? el("div", { className: "ai-sources" }, ...r.sources.map(source =>
-      el("button", { className: "pill", textContent: `${source.name} · page ${source.number}`, onclick: () => { $("ai-sheet").close(); location.hash = `doc/${source.doc}/${source.page}`; } }))) : null,
-    r.note ? para("ai-note", r.note) : null,
-  ]);
+// Chat about the notes. The conversation lives in this page only; every message sends it all again.
+const chat = { within: "", messages: [], busy: null, returnTo: false };
+const chatPlace = () => state.byId.get(chat.within);
+// Open the chat. `within` is a document or folder to keep to, null for all notes,
+// or left out to carry on with whatever the chat was about.
+function openChat(within, question) {
+  if (within !== undefined) {
+    const id = within?.id || "";
+    if (id !== chat.within && chat.messages.length) { chat.busy?.abort(); chat.messages = []; }
+    chat.within = id;
+  }
+  if (chat.within && !chatPlace()) chat.within = "";  // it was removed meanwhile
+  renderChat();
+  if (!$("chat").open) $("chat").showModal();
+  $("chat-input").focus();
+  if (question) chatSend(question);
 }
-$("ai-ask").onclick = () => askNotes("");
+function renderChat() {
+  const place = chatPlace();
+  const options = [["", "All my notes"], ...folderOptions().slice(1)];
+  if (place && !place.folder) options.push([place.id, `Document: ${place.name}`]);
+  $("chat-scope").replaceChildren(...options.map(([id, label]) => el("option", { value: id, textContent: label })));
+  $("chat-scope").value = chat.within;
+  $("chat-input").placeholder = place ? `Ask about “${place.name}”` : "Ask about your notes";
+  $("chat-send").textContent = chat.busy ? "Stop" : "Send";
+  const log = $("chat-log");
+  if (!chat.messages.length) {
+    const starters = place && !place.folder
+      ? ["Summarise this in a few lines", "What are the open actions?", "What did I decide?"]
+      : ["What are my open actions?", "What have I been working on lately?", "What did I decide, and where?"];
+    log.replaceChildren(el("div", { className: "chat-empty" },
+      para("", place ? `Ask anything about “${place.name}”. Answers come from its recognised text, with the pages they rest on.`
+        : "Ask anything about your notes. Answers come from their recognised text, with the pages they rest on."),
+      el("div", { className: "ai-sources" }, ...starters.map(text => el("button", { className: "pill", textContent: text, onclick: () => chatSend(text) })))));
+    return;
+  }
+  log.replaceChildren(...chat.messages.map((message, index) => {
+    if (message.role === "user") return el("div", { className: "chat-msg user", textContent: message.content });
+    message.node = para("ai-out", message.content);
+    if (message.pending && !message.content) { message.node.textContent = "Reading your notes…"; message.node.classList.add("waiting"); }
+    const done = !message.pending && message.content;
+    return el("div", { className: "chat-msg assistant" }, ...[
+      message.node,
+      message.error ? para("ai-error", message.error) : null,
+      message.sources?.length ? el("div", { className: "ai-sources" }, ...message.sources.map(source =>
+        el("button", { className: "pill", textContent: `[${source.cite}] ${source.name} · page ${source.number}`, title: "Open this page", onclick: () => {
+          chat.returnTo = true;  // come back to the chat when the page is closed
+          $("chat").close();
+          location.hash = `doc/${source.doc}/${source.page}`;
+        } }))) : null,
+      message.note ? para("ai-note", message.note) : null,
+      done ? el("div", { className: "chat-tools" },
+        el("button", { textContent: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(message.content); toast("Copied"); } catch { toast("Couldn't copy."); } } }),
+        el("button", { textContent: "Send to tablet", disabled: !canChange(), title: canChange() ? "" : "Connect the tablet first", onclick: () => chatToTablet(index) })) : null,
+    ].filter(Boolean));
+  }));
+  log.scrollTop = log.scrollHeight;
+}
+async function chatSend(text) {
+  text = text.trim();
+  if (!text || chat.busy) return;
+  const reply = { role: "assistant", content: "", sources: [], note: "", pending: true };
+  // Questions and replies are kept in pairs; a pair whose reply failed is left out of what is sent.
+  const history = [];
+  for (let i = 0; i + 1 < chat.messages.length; i += 2) {
+    if (chat.messages[i + 1].content) history.push({ role: "user", content: chat.messages[i].content }, { role: "assistant", content: chat.messages[i + 1].content });
+  }
+  history.push({ role: "user", content: text });
+  chat.messages.push({ role: "user", content: text }, reply);
+  const control = chat.busy = new AbortController();
+  $("chat-input").value = "";
+  renderChat();
+  const log = $("chat-log");
+  const handle = event => {
+    if (event.type === "text") {
+      const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+      reply.content += event.text;
+      reply.node.classList.remove("waiting");
+      reply.node.textContent = reply.content;
+      if (atEnd) log.scrollTop = log.scrollHeight;
+    } else if (event.type === "done") { reply.sources = event.sources; reply.note = event.note; }
+    else if (event.type === "error") reply.error = event.error;
+  };
+  try {
+    const res = await fetch("/api/ai/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ within: chat.within, messages: history }), signal: control.signal });
+    if (!res.ok || !res.body) throw new Error((await res.json().catch(() => ({}))).error || "The app could not complete that request.");
+    const reader = res.body.getReader(), decoder = new TextDecoder();
+    let waiting = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      waiting += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const lines = waiting.split("\n");
+      waiting = lines.pop();
+      for (const line of lines) if (line.trim()) handle(JSON.parse(line));
+      if (done) break;
+    }
+  } catch (error) {
+    if (error.name === "AbortError") reply.note = "Stopped.";
+    else reply.error = error.message === "Failed to fetch" ? "Could not reach the app. Try again." : error.message;
+  }
+  reply.pending = false;
+  if (chat.busy === control) chat.busy = null;
+  if (!reply.content && !reply.error) reply.error = reply.note === "Stopped." ? "Stopped before anything was written." : "No reply came back. Try again.";
+  if (chat.messages.includes(reply)) renderChat();
+}
+function chatToTablet(index) {
+  const reply = chat.messages[index], question = chat.messages[index - 1]?.content || "";
+  const from = reply.sources.length ? `\n\nFrom:\n${reply.sources.map(s => `- [${s.cite}] ${s.name}, page ${s.number}`).join("\n")}` : "";
+  act("Sending the answer to the tablet…", () => api("/api/ai/chat-send", { question: question.slice(0, 8000), answer: reply.content + from, within: chat.within }), "Answer sent to the tablet");
+}
+$("chat-form").onsubmit = event => {
+  event.preventDefault();
+  if (chat.busy) chat.busy.abort(); else chatSend($("chat-input").value);
+};
+$("chat-input").onkeydown = event => {
+  if (event.key === "Enter" && !event.shiftKey && !event.isComposing) { event.preventDefault(); if (!chat.busy) chatSend($("chat-input").value); }
+};
+// Other notes mean other page numbers and other answers, so a change of scope starts afresh.
+$("chat-scope").onchange = () => { chat.busy?.abort(); chat.busy = null; chat.messages = []; chat.within = $("chat-scope").value; renderChat(); };
+$("chat-new").onclick = () => { chat.busy?.abort(); chat.busy = null; chat.messages = []; renderChat(); $("chat-input").focus(); };
+$("chat-close").onclick = () => $("chat").close();
+$("viewer").addEventListener("close", () => { if (chat.returnTo) { chat.returnTo = false; openChat(); } });
+$("ai-ask").onclick = () => openChat();
 $("ai-tidy").onclick = () => tidy(currentFolder());
 async function tidy(folder) {
   const title = "Suggest names and folders";

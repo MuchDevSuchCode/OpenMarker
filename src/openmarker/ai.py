@@ -10,6 +10,7 @@ that was already recognised for questions across the library.
                  than the built-in recogniser; the result feeds search
     summarise    a summary and a list of actions for one document
     ask_notes    answer a question from the text of the whole library
+    chat         a conversation about the notes, the reply arriving as it is written
     tidy         suggest names and folders for documents
     answer_page  read a page as a question and write the reply
 """
@@ -37,6 +38,8 @@ NUMBERS = {
     "ai_picture_width": (1240, 600, 2400),  # width in pixels of the page pictures sent
 }
 TEXT_BUDGET = 300_000  # characters of notes sent with one question
+CHAT_TURNS = 40  # messages of a conversation sent along with a new one
+CHAT_MESSAGE = 8000  # longest single chat message, in characters
 TIDY_LIMIT = 60  # documents looked at in one tidy-up
 EXCERPT = 700  # characters of each document shown to the model when tidying
 
@@ -127,20 +130,18 @@ def _client():
     return anthropic.Anthropic(api_key=key) if key else anthropic.Anthropic()
 
 
-def ask(system: str, content: list | str, schema: dict | None = None) -> str | dict:
-    """One request to the model. Returns its text, or the parsed reply when a JSON schema is given."""
+def _request(system: str | list, messages: list, schema: dict | None = None) -> tuple[dict, list]:
+    """The request for the model, built from the saved settings, and the beta features it uses."""
     if not workflow.load_config().get("ai_enabled"):
         raise AIError("AI features are switched off. Turn them on in Settings.")
     if not key_source():
         raise AIError("Add an Anthropic API key in Settings to use AI features.")
-    import anthropic
-
     chosen = model()
     request: dict = {
         "model": chosen,
         "max_tokens": number("ai_max_tokens"),
         "system": system,
-        "messages": [{"role": "user", "content": content}],
+        "messages": messages,
     }
     output = {}
     if effort():
@@ -154,21 +155,36 @@ def ask(system: str, content: list | str, schema: dict | None = None) -> str | d
         # If the model declines a request, let the service pass it to another model.
         betas.append(FALLBACK_BETA)
         request["fallbacks"] = "default"
+    return request, betas
+
+
+def _failure(exc: Exception) -> AIError:
+    """What to tell the user when a request to the AI service fails."""
+    import anthropic
+
+    if isinstance(exc, anthropic.AuthenticationError):
+        return AIError("The API key was not accepted. Check it in Settings.")
+    if isinstance(exc, anthropic.PermissionDeniedError):
+        return AIError("That API key isn't allowed to use this model.")
+    if isinstance(exc, anthropic.RateLimitError):
+        return AIError("The AI service is busy or your usage limit was reached. Try again shortly.")
+    if isinstance(exc, anthropic.APIStatusError):
+        return AIError(f"The AI service refused the request ({exc.status_code}): {exc.message}")
+    if isinstance(exc, anthropic.APIConnectionError):
+        return AIError("Couldn't reach the AI service. Check the internet connection.")
+    return AIError(f"The AI request failed: {exc}")
+
+
+def ask(system: str, content: list | str, schema: dict | None = None) -> str | dict:
+    """One request to the model. Returns its text, or the parsed reply when a JSON schema is given."""
+    request, betas = _request(system, [{"role": "user", "content": content}], schema)
+    import anthropic
+
     try:
         with _client().beta.messages.stream(betas=betas, **request) as stream:
             message = stream.get_final_message()
-    except anthropic.AuthenticationError as exc:
-        raise AIError("The API key was not accepted. Check it in Settings.") from exc
-    except anthropic.PermissionDeniedError as exc:
-        raise AIError("That API key isn't allowed to use this model.") from exc
-    except anthropic.RateLimitError as exc:
-        raise AIError("The AI service is busy or your usage limit was reached. Try again shortly.") from exc
-    except anthropic.APIStatusError as exc:
-        raise AIError(f"The AI service refused the request ({exc.status_code}): {exc.message}") from exc
-    except anthropic.APIConnectionError as exc:
-        raise AIError("Couldn't reach the AI service. Check the internet connection.") from exc
     except anthropic.AnthropicError as exc:
-        raise AIError(f"The AI request failed: {exc}") from exc
+        raise _failure(exc) from exc
     if message.stop_reason == "refusal":
         raise AIError("The model declined to answer that.")
     if message.stop_reason == "max_tokens":
@@ -333,6 +349,18 @@ def ask_notes(question: str, items: dict[str, library.Item], budget: int = TEXT_
     question = question.strip()
     if not question:
         raise AIError("Type a question first.")
+    pages, listing, note = _notes(items, within, question, budget)
+    reply = ask(ASK, f"My notes:\n\n{listing}\n\nMy question: {question}", ASK_SCHEMA)
+    sources, seen = [], set()
+    for number in reply["sources"]:
+        if isinstance(number, int) and 1 <= number <= len(pages) and number not in seen:
+            seen.add(number)
+            sources.append({k: pages[number - 1][k] for k in ("doc", "page", "name", "number")})
+    return {"answer": str(reply["answer"]).strip(), "sources": sources, "note": note}
+
+
+def _notes(items: dict[str, library.Item], within: str, question: str, budget: int) -> tuple[list[dict], str, str]:
+    """The recognised pages to answer from, the same pages as numbered text, and a note if some were left out."""
     pages = []
     for doc, page, text in ocr.all_text():
         item = items.get(doc)
@@ -341,19 +369,86 @@ def ask_notes(question: str, items: dict[str, library.Item], budget: int = TEXT_
     if not pages:
         raise AIError("There is no recognised text here yet. Open it and use “Convert to text”, or “Read the handwriting with AI”."
                       if within else "There is no recognised text to search yet. Sync, or use “Improve with AI” on a document.")
+    # Always in the same order, so a follow-up question sends the same text and the service can reuse it.
+    pages.sort(key=lambda p: (p["name"].lower(), p["doc"], p["number"]))
     note = ""
     if sum(len(p["text"]) for p in pages) > budget:
-        kept = _relevant(pages, question, budget)
-        note = f"{'There is a lot here' if within else 'Your library is large'}, so this read the {len(kept)} pages closest to the question, of {len(pages)}."
-        pages = kept
+        chosen = {(p["doc"], p["page"]) for p in _relevant(pages, question, budget)}
+        note = f"{'There is a lot here' if within else 'Your library is large'}, so this read the {len(chosen)} pages closest to the question, of {len(pages)}."
+        pages = [p for p in pages if (p["doc"], p["page"]) in chosen]
     listing = "\n\n".join(f"[{n}] {p['name']}, page {p['number']}\n{p['text']}" for n, p in enumerate(pages, 1))
-    reply = ask(ASK, f"My notes:\n\n{listing}\n\nMy question: {question}", ASK_SCHEMA)
+    return pages, listing, note
+
+
+CHAT = (
+    "You are talking with someone about their own notes, given below as numbered pages. Answer from "
+    "the notes; when they do not contain the answer, say so plainly instead of guessing, and keep "
+    "anything you add from general knowledge clearly apart. Recognised handwriting has mistakes, so "
+    "read it charitably. After each statement that rests on a page, cite it by its number in square "
+    "brackets, like [3] or [2][5]. Plain text only, no markdown. Be brief unless asked for more."
+)
+
+
+def chat_messages(messages) -> list[dict]:
+    """A conversation from the browser, checked: text only, taking turns, ending with a question."""
+    if not isinstance(messages, list) or not messages:
+        raise AIError("Type a question first.")
+    out = []
+    for message in messages[-CHAT_TURNS:]:
+        role = message.get("role") if isinstance(message, dict) else None
+        text = message.get("content") if isinstance(message, dict) else None
+        if role not in ("user", "assistant") or not isinstance(text, str) or not text.strip():
+            raise AIError("That conversation can't be read.")
+        if len(text) > CHAT_MESSAGE * (1 if role == "user" else 8):
+            raise AIError("That message is too long.")
+        if out and out[-1]["role"] == role:
+            raise AIError("That conversation can't be read.")
+        out.append({"role": role, "content": text.strip()})
+    while out and out[0]["role"] != "user":  # cutting old messages can leave a reply first
+        out.pop(0)
+    if not out or out[-1]["role"] != "user":
+        raise AIError("Type a question first.")
+    return out
+
+
+def chat(messages, items: dict[str, library.Item], within: str = "", budget: int = TEXT_BUDGET):
+    """Carry on a conversation about the notes, or about the document or folder `within`.
+
+    Yields {"type": "text", "text"} as the reply is written, then one
+    {"type": "done", "sources": [{"doc", "page", "name", "number", "cite"}], "note"}.
+    Nothing is kept between calls: the browser sends the conversation each time.
+    """
+    messages = chat_messages(messages)
+    asked = " ".join(m["content"] for m in messages if m["role"] == "user")
+    pages, listing, note = _notes(items, within, asked, budget)
+    system = [
+        {"type": "text", "text": CHAT},
+        # The notes are the bulk of every request in a conversation; marked so they are read once and reused.
+        {"type": "text", "text": f"The notes:\n\n{listing}", "cache_control": {"type": "ephemeral"}},
+    ]
+    request, betas = _request(system, messages)
+    import anthropic
+
+    written = []
+    try:
+        with _client().beta.messages.stream(betas=betas, **request) as stream:
+            for text in stream.text_stream:
+                written.append(text)
+                yield {"type": "text", "text": text}
+            message = stream.get_final_message()
+    except anthropic.AnthropicError as exc:
+        raise _failure(exc) from exc
+    if message.stop_reason == "refusal":
+        raise AIError("The model declined to answer that.")
+    if message.stop_reason == "max_tokens":
+        note = (note + " " if note else "") + "The reply was cut short: it reached the longest reply allowed in Settings."
     sources, seen = [], set()
-    for number in reply["sources"]:
-        if isinstance(number, int) and 1 <= number <= len(pages) and number not in seen:
-            seen.add(number)
-            sources.append({k: pages[number - 1][k] for k in ("doc", "page", "name", "number")})
-    return {"answer": str(reply["answer"]).strip(), "sources": sources, "note": note}
+    for match in re.finditer(r"\[(\d{1,4})\]", "".join(written)):
+        number_ = int(match.group(1))
+        if 1 <= number_ <= len(pages) and number_ not in seen:
+            seen.add(number_)
+            sources.append({**{k: pages[number_ - 1][k] for k in ("doc", "page", "name", "number")}, "cite": number_})
+    yield {"type": "done", "sources": sources, "note": note}
 
 
 def _trashed(item: library.Item, items: dict[str, library.Item]) -> bool:

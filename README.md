@@ -112,14 +112,21 @@ nothing is sent until you use one.
 | --- | --- | --- |
 | **Summarise** | *Summarise* in a document | Pictures of that document's pages. The summary and its action list can be sent to the tablet as a page. |
 | **Improve with AI** | *Convert to text* in a document | Pictures of that document's handwritten pages, 20 at a time. The text replaces the built-in recogniser's and feeds search. Works on macOS and Linux too. |
-| **Ask your notes** | *AI* menu, or *Ask AI* in search results | The recognised text of your notebooks (the closest pages, if the library is very large) and your question. |
+| **Chat with your notes** | *AI* menu, *Ask AI* in search results, or right-click a document or folder | The recognised text of your notebooks (the closest pages, if the library is very large) and the conversation so far. Replies appear as they are written and name the pages they rest on; any reply can be sent to the tablet as a page. |
 | **Suggest names and folders** | *AI* menu | The names and opening text of the documents in the current folder, and your folder names. Nothing changes until you apply the suggestions you ticked. |
 | **Answer tagged pages** | Set a tag under Settings › AI | After a sync, a picture of each page carrying that tag. The answer arrives as a document next to the notebook. A page is answered again only if it changes. |
 
 The first four are also in the right-click menu of a document or folder.
-There, *Ask about this document* (or *folder*) keeps the question to the
+There, *Ask about this document* (or *folder*) opens the chat keeping to the
 recognised text of that one document or folder, and *Suggest names and
 folders* works on the folder you clicked.
+
+The chat reads text, not page pictures, so a notebook has to have been
+converted to text (or read with AI) before the chat can see it. A
+conversation is kept only in the open page: it is not written to disk, and
+is gone when you start a new chat or reload. Each message sends the notes
+again; they are marked for the API's prompt cache, so follow-ups in a large
+library cost a fraction of the first question.
 
 *Answer tagged pages* is the only feature that runs by itself, and only for
 pages you tagged on the tablet. It runs when you sync from the browser (or

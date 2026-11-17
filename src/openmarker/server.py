@@ -412,6 +412,23 @@ def ai_action(action: str, body: dict) -> dict:
                                     kicker=f"Summary · {item.name}", checklist=[a for a in actions if a.strip()])
             beside = item.parent if item.parent in items else ""
             tablet.upload(host, f"{item.name} – summary", pdf, "pdf", destination(host, "ai_summary_folder", beside))
+        elif action == "ai/chat-send":
+            host = require_tablet()
+            answer = words("answer", 60000)
+            if not answer:
+                raise UserError("There is nothing to send.")
+            question = " ".join(words("question", ai.CHAT_MESSAGE).split())
+            place = items.get(_id(body, "within", ("",))) if body.get("within") else None
+            if place is None:
+                beside = ""
+            elif place.is_folder:
+                beside = place.id
+            else:
+                beside = place.parent if place.parent in items else ""
+            title = (question[:57].rstrip() + "…") if len(question) > 58 else (question or "From your notes")
+            pdf = generate.text_pdf(title, answer, kicker=f"Chat · {place.name}" if place else "Chat · your notes")
+            name = "".join(c for c in title if c not in '\\/:*?"<>|').strip() or "Chat answer"
+            tablet.upload(host, f"{name} – answer", pdf, "pdf", destination(host, "ai_answer_folder", beside))
         elif action == "ai/tidy-apply":
             host = require_tablet()
             changes = body.get("changes")
@@ -447,6 +464,18 @@ def ai_action(action: str, body: dict) -> dict:
         raise UserError(str(exc)) from exc
     time.sleep(2)  # give the tablet's app a moment before reading its files
     return sync()
+
+
+def chat_events(body: dict):
+    """The reply to a chat message as events for the browser; a failure is the last event, never an exception."""
+    try:
+        store, _ = store_dir()
+        within = _id(body, "within", ("",)) if body.get("within") else ""
+        yield from ai.chat(body.get("messages"), library.load(store), within)
+    except (ai.AIError, UserError) as exc:
+        yield {"type": "error", "error": str(exc)}
+    except Exception as exc:  # the stream has begun, so this is the only way left to say so
+        yield {"type": "error", "error": f"Something went wrong: {exc}"}
 
 
 def _auto_sync_loop() -> None:
@@ -607,6 +636,23 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args) -> None:  # keep the terminal quiet
         pass
 
+    def _events(self, events) -> None:
+        """Send events one JSON line at a time, as they happen. Stops if the browser stops listening."""
+        self.send_response(200)
+        self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+        try:
+            for event in events:
+                self.wfile.write(json.dumps(event).encode("utf-8") + b"\n")
+                self.wfile.flush()
+        except OSError:  # the browser went away (Stop was pressed, or the page closed)
+            pass
+        finally:
+            events.close()  # ends the request to the AI service too
+
     def _send(self, body: bytes, content_type: str, code: int = 200, cache: bool = False, download: str = "") -> None:
         self.send_response(code)
         self.send_header("Content-Type", content_type)
@@ -741,6 +787,8 @@ class Handler(BaseHTTPRequestHandler):
                 if key is not False:
                     ai.save_key(key)
                 self._json({"ok": True})
+            elif action == "ai/chat":
+                self._events(chat_events(body))
             elif action.startswith("ai/"):
                 self._json(ai_action(action, body))
             else:
