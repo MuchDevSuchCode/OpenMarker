@@ -57,12 +57,12 @@ def require_tablet() -> str:
 
 _seen: tuple[str | None, str | None] = (None, None)  # the tablet's address and link, kept current by _watch_tablet
 WATCH_SECONDS = 5
-DISCOVER_SECONDS = 30  # how often to search the network while the tablet is missing
+DISCOVER_SECONDS = 15  # how often to look the tablet up by name while it is missing
 
 
 def _watch_tablet() -> None:
-    """Notice the tablet coming and going, find it again when its Wi-Fi
-    address has changed, and sync as soon as it appears (if auto-sync is on)."""
+    """Notice the tablet coming and going, find it again by name when its
+    Wi-Fi address has changed, and sync as soon as it appears (if auto-sync is on)."""
     global _seen
     searched = 0.0
     while True:
@@ -75,6 +75,8 @@ def _watch_tablet() -> None:
                 host = workflow.discover()
                 via = "Wi-Fi" if host else None
             arrived = host is not None and _seen[0] is None
+            if arrived and tablet.is_set_up():
+                workflow.remember_name(host)
             _seen = (host, via)
             if arrived and tablet.is_set_up() and workflow.load_config().get("auto_sync"):
                 sync(wait=False)

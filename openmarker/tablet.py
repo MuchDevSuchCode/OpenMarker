@@ -72,6 +72,12 @@ def is_set_up() -> bool:
     return key_path().exists()
 
 
+def hostname(host: str) -> str:
+    """The tablet's network name, or "" if it has an unusable one."""
+    name = _ssh(host, "hostname").decode("utf-8", "replace").strip()
+    return name if re.fullmatch(r"[A-Za-z0-9-]{1,63}", name) else ""
+
+
 def is_ours(host: str) -> bool:
     """Whether the device at this address is the tablet that was set up.
 

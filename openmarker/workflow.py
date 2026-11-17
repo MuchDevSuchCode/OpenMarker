@@ -19,7 +19,6 @@ import json
 import os
 import socket
 import subprocess
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -68,34 +67,34 @@ def find_tablet() -> tuple[str | None, str | None]:
 
 
 def discover() -> str | None:
-    """Look for the tablet on this computer's local networks.
+    """Look the tablet up by the name it announces on the local network.
 
-    The tablet's Wi-Fi address changes from time to time. This tries every
-    address on the networks this computer is attached to (assumed to be
-    home-sized: 254 addresses each) and returns the one that proves to be the
-    tablet (see tablet.is_ours), saving it as the Wi-Fi address.
+    The tablet's Wi-Fi address changes from time to time, but it answers to
+    `<its hostname>.local` (mDNS). The hostname is learned the first time the
+    tablet is reached (see remember_name). Returns the address if the device
+    there proves to be the tablet (see tablet.is_ours), saving it as the
+    Wi-Fi address.
     """
+    name = load_config().get("tablet_name")
+    if not name:
+        return None
     try:
-        own = {info[4][0] for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET)}
+        found = {info[4][0] for info in socket.getaddrinfo(f"{name}.local", 22, socket.AF_INET)}
     except OSError:
         return None
-    usb_net = tablet.USB_HOST.rsplit(".", 1)[0]
-    candidates = []
-    for address in sorted(own):
-        net, _, last = address.rpartition(".")
-        private = address.startswith(("10.", "192.168.")) or (
-            address.startswith("172.") and 16 <= int(address.split(".")[1]) <= 31)
-        if private and net != usb_net:
-            candidates += [f"{net}.{n}" for n in range(1, 255) if str(n) != last]
-    if not candidates:
-        return None
-    with ThreadPoolExecutor(max_workers=128) as pool:
-        listening = [h for h, up in zip(candidates, pool.map(lambda h: reachable(h, 0.5), candidates)) if up]
-    for host in listening:
-        if tablet.is_ours(host):
+    for host in sorted(found):
+        if host != tablet.USB_HOST and reachable(host) and tablet.is_ours(host):
             update_config(wifi_host=host)
             return host
     return None
+
+
+def remember_name(host: str) -> None:
+    """Record the tablet's hostname, so it can be found again by name."""
+    if not load_config().get("tablet_name"):
+        name = tablet.hostname(host)
+        if name:
+            update_config(tablet_name=name)
 
 
 def changed_documents(paths: list[str]) -> list[str]:
