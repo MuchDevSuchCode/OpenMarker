@@ -101,6 +101,14 @@
   .card .card { width: 100%; }
   .more { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); opacity: 0; line-height: 1; font-weight: 700; }
   .card:hover .more, .more:focus-visible { opacity: 1; }
+  /* The right-click menu: a popover, placed where the pointer is. */
+  #ctx { position: fixed; inset: auto; margin: 0; min-width: 200px; max-width: 300px; padding: 6px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  #ctx button { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; background: none; border-radius: 6px; color: inherit; font: inherit; }
+  #ctx button:hover:not(:disabled), #ctx button:focus-visible { background: color-mix(in srgb, var(--ink) 7%, transparent); outline: none; }
+  #ctx button:disabled { color: var(--muted); opacity: .6; }
+  #ctx button.danger { color: var(--accent); }
+  #ctx hr { border: 0; border-top: 1px solid var(--line); margin: 5px 4px; }
+  #ctx .ctx-title { padding: 4px 10px 6px; color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .section { grid-column: 1 / -1; font: 600 13px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 8px; }
   .snippet { font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -213,6 +221,8 @@
   .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
   .empty-state { grid-column: 1 / -1; }
   .more { opacity: 1; width: 40px; height: 40px; }
+  /* With a mouse the button waits for the pointer; on touch screens it is always there. */
+  @media (hover: hover) { .more { opacity: 0; } .card:hover .more, .card:focus-within .more { opacity: 1; } }
   .card:focus-within .thumb { outline: 2px solid var(--accent); outline-offset: 3px; }
   .viewer-bar { flex-wrap: wrap; gap: 8px; }
   .viewer-bar h2 { min-width: 120px; }
@@ -446,6 +456,7 @@
 </dialog>
 <div class="busy" id="busy" role="status" aria-live="polite" popover="manual">Updating the tablet…</div>
 <div class="toast" id="toast" role="status" popover="manual"></div>
+<div id="ctx" role="menu" popover="auto"></div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -560,6 +571,10 @@ function renderNav() {
     button.setAttribute("aria-current", String(state.folder === id && !state.query));
     button.insertAdjacentHTML("beforeend", icon);
     button.append(el("span", { textContent: label }), el("span", { className: "count", textContent: count || "" }));
+    button.oncontextmenu = event => {
+      const entries = id === "" ? placeMenu("") : state.byId.has(id) ? itemMenu(state.byId.get(id)) : null;
+      if (entries) showMenu(event, entries, label);
+    };
     nav.append(button);
   };
   const docCount = id => children(id).filter(i => !i.folder).length;
@@ -605,15 +620,103 @@ function card(item) {
     : `${item.pages.length || "–"} page${item.pages.length === 1 ? "" : "s"} · ${ago(item.modified)}`;
   const open = el("button", { className: "card", onclick: () => item.folder ? go(item.id) : openDoc(item) },
     thumb, el("h3", { textContent: item.name, title: item.name }), el("p", { textContent: detail }));
-  if (!item.folder || item.parent === "trash") return open;
-  // Folders get their actions here; documents have them in the viewer.
-  const more = el("button", { className: "more", textContent: "⋯", title: "Folder actions", onclick: async () => {
-    const choice = await ask({ title: item.name, options: [["rename", "Rename…"], ["move", "Move…"], ["trash", "Move to trash"]], ok: "Continue" });
-    if (choice) ({ rename, move, trash })[choice](item);
-  } });
+  // The same menu by right-click, by the menu key, and by the ⋯ button (for touch).
+  const more = el("button", { className: "more", textContent: "⋯", title: "Actions", onclick: event => showMenu(event, itemMenu(item), item.name, more) });
   more.setAttribute("aria-label", `Actions for ${item.name}`);
-  return el("div", { className: "card" }, open, more);
+  more.setAttribute("aria-haspopup", "menu");
+  return el("div", { className: "card", oncontextmenu: event => showMenu(event, itemMenu(item), item.name) }, open, more);
 }
+
+// Right-click menus. An entry is [label, action, { danger, disabled }], or "-" for a divider.
+function showMenu(event, entries, title, anchor) {
+  event.preventDefault();
+  event.stopPropagation();
+  closeMenus();
+  const menu = $("ctx");
+  if (menu.matches(":popover-open")) menu.hidePopover();
+  menu.replaceChildren(el("div", { className: "ctx-title", textContent: title }), ...entries.filter(Boolean).map(entry => {
+    if (entry === "-") return el("hr");
+    const [label, action, { danger, disabled } = {}] = entry;
+    const button = el("button", { textContent: label, disabled: Boolean(disabled), className: danger ? "danger" : "", onclick: () => { menu.hidePopover(); action(); } });
+    button.setAttribute("role", "menuitem");
+    return button;
+  }));
+  menu.setAttribute("aria-label", `Actions for ${title}`);
+  menu.showPopover();
+  // At the pointer; below the ⋯ button or the focused item when there is no pointer position.
+  let x = event.clientX, y = event.clientY;
+  if (anchor || (!x && !y)) {
+    const box = (anchor || event.target).getBoundingClientRect();
+    x = box.left; y = box.bottom + 4;
+  }
+  const { width, height } = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(x, innerWidth - width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, innerHeight - height - 8))}px`;
+  menu.querySelector("button:not(:disabled)")?.focus();
+}
+$("ctx").addEventListener("keydown", event => {
+  const buttons = [...$("ctx").querySelectorAll("button:not(:disabled)")];
+  const at = buttons.indexOf(document.activeElement);
+  const to = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: buttons.length - 1 }[event.key];
+  if (to === undefined || !buttons.length) return;
+  event.preventDefault();
+  buttons[(to + buttons.length) % buttons.length].focus();
+});
+$("ctx").oncontextmenu = event => event.preventDefault();
+addEventListener("scroll", () => { if ($("ctx").matches(":popover-open")) $("ctx").hidePopover(); }, true);
+addEventListener("resize", () => { if ($("ctx").matches(":popover-open")) $("ctx").hidePopover(); });
+
+const newFolder = async parent => {
+  const inside = state.byId.get(parent)?.name;
+  const name = await ask({ title: inside ? `New folder in “${inside}”` : "New folder", value: "", ok: "Create" });
+  if (name) return act("Creating the folder…", () => api("/api/folder", { name, parent }), "Folder created");
+};
+const putBack = item => act("Putting it back…", () => api("/api/move", { id: item.id, parent: "" }), "Put back in My files");
+// What can be done with a document or folder.
+function itemMenu(item) {
+  const disabled = !canChange();
+  const open = ["Open", () => item.folder ? go(item.id) : openDoc(item)];
+  if (isTrashed(item)) return [open, item.parent === "trash" && "-", item.parent === "trash" && ["Put back in My files", () => putBack(item), { disabled }]];
+  return [
+    open,
+    item.folder
+      ? ["New folder inside…", () => newFolder(item.id), { disabled }]
+      : [item.type === "epub" ? "Download EPUB" : "Export PDF", () => download(item)],
+    "-",
+    ["Rename…", () => rename(item), { disabled }],
+    ["Move…", () => move(item), { disabled }],
+    "-",
+    ["Move to trash", async () => {
+      const here = state.folder === item.id, parent = item.parent;
+      if (await trash(item) && here) go(parent);  // don't stay inside a folder that was just trashed
+    }, { disabled, danger: true }],
+  ];
+}
+// What can be done in a folder itself: the empty space of the library, or "My files" in the sidebar.
+function placeMenu(folder) {
+  const disabled = !canChange();
+  const send = id => () => { if (state.folder !== folder) go(folder); $(id).click(); };
+  return [
+    ["New folder…", () => newFolder(folder), { disabled }],
+    "-",
+    ["Send a PDF or EPUB file…", send("send-file"), { disabled }],
+    ["Send a picture…", send("send-image"), { disabled }],
+    ["Send a web page…", send("send-url"), { disabled }],
+    "-",
+    ["Sync now", () => $("sync").click(), { disabled: $("sync").disabled }],
+  ];
+}
+function download(item) {
+  const link = el("a", { href: item.type === "epub" ? `/api/original/${item.id}.epub` : `/api/export/${item.id}.pdf`, download: "" });
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+document.querySelector("main").addEventListener("contextmenu", event => {
+  if (event.target.closest(".card, header, .ai-row, a, input")) return;  // those keep the browser's own menu
+  if (state.query || state.folder === "trash" || (state.byId.has(state.folder) && isTrashed(state.byId.get(state.folder)))) return;
+  showMenu(event, placeMenu(currentFolder()), state.byId.get(currentFolder())?.name || "My files");
+});
 function hitCard(hit) {
   const src = `/api/page/${hit.doc}/${hit.page}.svg?q=${encodeURIComponent(state.query)}`;
   const thumb = el("div", { className: "thumb" }, el("img", { src, alt: "", loading: "lazy" }));
@@ -987,10 +1090,7 @@ $("send-url").onclick = async () => {
   if (url) act("Saving the page and sending it…", () => api("/api/send-url", { url, parent: currentFolder() }), "Sent to the tablet");
 };
 $("send-agenda").onclick = () => act("Making today's page…", () => api("/api/agenda", {}), "Agenda page sent");
-$("new-folder").onclick = async () => {
-  const name = await ask({ title: "New folder", value: "", ok: "Create" });
-  if (name) act("Creating the folder…", () => api("/api/folder", { name, parent: currentFolder() }), "Folder created");
-};
+$("new-folder").onclick = () => newFolder(currentFolder());
 let dragDepth = 0;
 addEventListener("dragenter", event => { if (event.dataTransfer?.types.includes("Files")) { dragDepth++; document.body.classList.add("drop"); } });
 addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("drop"); } });

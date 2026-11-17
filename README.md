@@ -39,7 +39,8 @@ or supported by the tablet's manufacturer.
 - **Trace a drawing into real pen strokes.** Turns a line drawing into a
   native notebook page made of fineliner strokes that you can erase, select
   and draw over on the tablet.
-- **Organise.** New folders, rename, move and trash from the browser.
+- **Organise.** New folders, rename, move and trash from the browser:
+  right-click a document, a folder or the empty space beside them.
 - **AI, if you want it.** Off by default. With your own Anthropic API key:
   summaries with action lists, more accurate handwriting to text, questions
   answered from your notes, name and folder suggestions, and answers to
