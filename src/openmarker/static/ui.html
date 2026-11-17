@@ -93,7 +93,7 @@
   .pill.accent { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
   .danger { color: var(--accent); }
   .menu { position: relative; }
-  .menu-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; min-width: 210px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); display: none; }
+  .menu-list { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; width: min(210px, calc(100vw - 16px)); padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); display: none; }
   .menu.open .menu-list { display: block; }
   .menu-list button { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 0; background: none; border-radius: 6px; }
   .menu-list button:hover { background: color-mix(in srgb, var(--ink) 7%, transparent); }
@@ -124,7 +124,7 @@
   dialog.sheet.chat { padding: 0; width: min(780px, 94vw); height: min(780px, calc(100dvh - 32px)); overflow: hidden; }
   dialog.sheet.chat[open] { display: flex; flex-direction: column; }
   .chat-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--line); }
-  .chat-head h3 { margin: 0 auto 0 0; }
+  .sheet .chat-head h3 { margin: 0 auto 0 0; }
   .chat-head label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
   .sheet .chat-head select { width: auto; max-width: 230px; padding: 7px 9px; }
   .chat-log { flex: 1; min-height: 0; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
@@ -154,6 +154,7 @@
   .pick b { display: block; font-weight: 600; }
   .pick small { display: block; color: var(--muted); font-size: 12.5px; }
   .ai-row { grid-column: 1 / -1; }
+  .ai-row .pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .set-foot { margin: 4px 0 12px; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
   .set-foot code { background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
   .set-link { border: 0; background: none; padding: 0; min-height: 0; margin-top: 6px; color: var(--muted); font-size: 12.5px; text-decoration: underline; }
@@ -218,7 +219,7 @@
   .sheet h3 { margin: 0 0 14px; font: 600 19px var(--serif); }
   .sheet input, .sheet select { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); }
   .sheet p { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; }
-  .sheet .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .sheet .row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
   dialog.sheet.wide { width: min(860px, 94vw); }
   .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
   .compare figure { margin: 0; }
@@ -284,7 +285,7 @@
     .viewer-body.with-history { grid-template-columns: minmax(0, 1fr); }
     .with-history .history { grid-row: 1; position: static; max-height: 260px; border-left: 0; border-bottom: 1px solid var(--line); }
     .pages { padding: 18px 12px 40px; }
-    .menu-list { min-width: 190px; }
+    .menu-list { width: min(190px, calc(100vw - 16px)); }
   }
 
 </style>
@@ -454,11 +455,11 @@
         <label class="set-row"><span><b>Effort</b><small>How hard the model thinks before it replies. More effort is slower and costs more.</small></span>
           <select id="set-ai-effort"></select></label>
         <label class="set-row"><span><b>Longest reply</b><small>The most the model may write in one reply, in tokens (a token is about three quarters of a word). <span id="lim-ai_max_tokens"></span></small></span>
-          <input type="number" id="set-ai-max-tokens" step="1000" inputmode="numeric"></label>
+          <input type="number" id="set-ai-max-tokens" step="1" inputmode="numeric" required></label>
         <label class="set-row"><span><b>Pages at a time</b><small>How many page pictures go in one request. Longer documents are read in batches, or summarised from their recognised text. <span id="lim-ai_pages"></span></small></span>
-          <input type="number" id="set-ai-pages" step="1" inputmode="numeric"></label>
+          <input type="number" id="set-ai-pages" step="1" inputmode="numeric" required></label>
         <label class="set-row"><span><b>Page picture width</b><small>Width in pixels of the page pictures sent. Larger is easier to read for small writing and costs more. <span id="lim-ai_picture_width"></span></small></span>
-          <input type="number" id="set-ai-width" step="20" inputmode="numeric"></label>
+          <input type="number" id="set-ai-width" step="1" inputmode="numeric" required></label>
         <label class="set-row inline"><span><b>Use another model if one declines</b><small>If the chosen model declines a request, let the service pass it to another Claude model instead of failing.</small></span>
           <input type="checkbox" class="switch" id="set-ai-fallback" role="switch"></label>
         <label class="set-row"><span><b>Answer tagged pages</b><small>Write a question on a page, give the page this tag on the tablet, and sync: the answer comes back as a document beside it. Leave empty to turn this off.</small></span>
@@ -510,7 +511,7 @@ const ICON = {
   home: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M9 10h6M9 14h6"/></svg>',
   trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
 };
-const state = { items: [], byId: new Map(), folder: "", query: "", status: null, hits: [], doc: null, version: "" };
+const state = { items: [], byId: new Map(), folder: "", query: "", status: null, hits: [], doc: null, version: null };
 
 const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -537,14 +538,18 @@ async function act(message, request, done) {
   return result.ok;
 }
 // A small modal: resolves to the entered or selected value, true for a plain confirm, or null if cancelled.
-function ask({ title, text, value, options, ok = "OK" }) {
+function ask({ title, text, value, options, selected, inputType = "text", ok = "OK" }) {
   const sheet = $("sheet"), input = $("sheet-input"), select = $("sheet-select");
   $("sheet-title").textContent = title;
   $("sheet-text").hidden = !text; $("sheet-text").textContent = text || "";
-  input.hidden = value === undefined; input.value = value || ""; input.required = value !== undefined; input.maxLength = title === "Send a web page" ? 2048 : 200;
+  input.type = inputType;
+  input.hidden = value === undefined; input.value = value || ""; input.required = value !== undefined; input.maxLength = inputType === "url" ? 2048 : 200;
   input.setAttribute("aria-label", title); select.setAttribute("aria-label", title);
   select.hidden = !options;
-  if (options) select.replaceChildren(...options.map(([id, label]) => el("option", { value: id, textContent: label })));
+  if (options) {
+    select.replaceChildren(...options.map(([id, label]) => el("option", { value: id, textContent: label })));
+    if (options.some(([id]) => id === selected)) select.value = selected;
+  }
   $("sheet-ok").textContent = ok;
   sheet.returnValue = "cancel";
   sheet.showModal();
@@ -568,7 +573,7 @@ const rename = async item => {
   if (name && name !== item.name) return act("Renaming on the tablet…", () => api("/api/rename", { id: item.id, name }), "Renamed");
 };
 const move = async item => {
-  const parent = await ask({ title: `Move “${item.name}” to`, options: folderOptions(item.id), ok: "Move" });
+  const parent = await ask({ title: `Move “${item.name}” to`, options: folderOptions(item.id), selected: item.parent, ok: "Move" });
   if (parent !== null && parent !== item.parent) return act("Moving on the tablet…", () => api("/api/move", { id: item.id, parent }), "Moved");
 };
 const trash = async item => {
@@ -789,7 +794,7 @@ function renderGrid() {
   grid.replaceChildren(...sorted(list).map(card));
   if (query.length > 2 && state.status?.ai) {
     grid.prepend(el("div", { className: "ai-row" },
-      el("button", { className: "pill", textContent: `✦ Ask AI: “${state.query}”`, onclick: () => openChat(null, state.query) })));
+      el("button", { className: "pill", textContent: `✦ Ask AI: “${state.query}”`, title: state.query, onclick: () => openChat(null, state.query) })));
   }
   if (query && state.hits.length) {
     grid.append(el("div", { className: "section", textContent: "Found in handwriting and text" }), ...state.hits.map(hitCard));
@@ -827,10 +832,13 @@ const openDoc = item => { location.hash = `doc/${item.id}`; };
 function renderAll() { renderNav(); renderCrumbs(); renderGrid(); }
 
 function showDoc(item, focusPage) {
-  if (state.doc !== item.id) { state.version = ""; state.textMode = false; $("v-body").classList.remove("with-history"); }
+  if (state.doc !== item.id) { state.version = null; state.textMode = false; $("v-body").classList.remove("with-history"); }
   state.doc = item.id;
+  const preview = state.version || item;
+  $("restore").hidden = !state.version;
   $("v-title").textContent = item.name;
-  $("v-meta").textContent = `${item.pages.length} page${item.pages.length === 1 ? "" : "s"} · edited ${ago(item.modified)}`;
+  const activity = state.version ? `saved ${ago(state.version.when)}` : `edited ${ago(item.modified)}`;
+  $("v-meta").textContent = `${preview.pages.length} page${preview.pages.length === 1 ? "" : "s"} · ${activity}`;
   $("v-export").hidden = item.type === "epub" && !item.has_original;
   $("v-export").textContent = item.type === "epub" ? "Download EPUB" : "Export PDF";
   if (state.version && item.type !== "epub") $("v-export").textContent = "Export current PDF";
@@ -844,17 +852,17 @@ function showDoc(item, focusPage) {
     el("button", { className: "pill", textContent: "Copy all", onclick: copyText }),
     el("a", { className: "pill", textContent: "Download .txt", href: `/api/text/${item.id}.txt` }),
     el("a", { className: "pill", textContent: "Download .md", href: `/api/text/${item.id}.md` })));
-  const at = state.version ? `&at=${state.version}` : "";
+  const at = state.version ? `&at=${state.version.id}` : "";
   const extra = at + (state.query ? `&q=${encodeURIComponent(state.query)}` : "");
-  item.pages.forEach((id, index) => {
+  preview.pages.forEach((id, index) => {
     const number = index + 1;
-    const source = item.source_pages[id];
+    const source = preview.source_pages[id];
     const base = `/api/page/${item.id}/${id}.svg`;
     let view;
-    if (item.has_pdf && source !== undefined) {
+    if (preview.has_pdf && source !== undefined) {
       // The original page as a picture, with the ink drawn over it.
       view = el("div", { className: "stack" },
-        el("img", { src: `/api/source/${item.id}/${source}.png`, alt: `Page ${number}`, loading: "lazy" }),
+        el("img", { src: `/api/source/${item.id}/${source}.png${state.version ? "?at=" + state.version.id : ""}`, alt: `Page ${number}`, loading: "lazy" }),
         el("img", { src: `${base}?over=${source}${extra}`, alt: "", loading: "lazy" }));
     } else {
       view = el("img", { src: `${base}?v=1${extra}`, alt: `Page ${number}`, loading: "lazy" });
@@ -865,7 +873,7 @@ function showDoc(item, focusPage) {
       el("div", { className: "ptext" })));
   });
   setTextMode(state.textMode && !state.version);
-  if (!item.pages.length) pages.append(el("p", { className: "note", textContent: item.type === "epub" ? "EPUB books can't be previewed here yet." : "No pages to show yet. If you just sent this, open it on the tablet once, then sync." }));
+  if (!preview.pages.length) pages.append(el("p", { className: "note", textContent: state.version ? "No pages in this version." : item.type === "epub" ? "EPUB books can't be previewed here yet." : "No pages to show yet. If you just sent this, open it on the tablet once, then sync." }));
   if (!$("viewer").open) $("viewer").showModal();
   const target = focusPage && document.getElementById(`page-${focusPage}`);
   if (target) target.scrollIntoView(); else $("viewer").scrollTop = 0;
@@ -898,23 +906,22 @@ async function showHistory() {
   const item = state.byId.get(state.doc);
   if (state.textMode) setTextMode(false);
   const open = $("v-body").classList.toggle("with-history");
-  if (!open) { state.version = ""; return showDoc(item); }
-  const { versions } = await api(`/api/history/${item.id}`);
-  if (state.doc !== item.id) return;
+  if (!open) { state.version = null; return showDoc(item); }
   const list = $("versions");
+  list.replaceChildren(el("p", { textContent: "Loading versions…" }));
+  const { versions } = await api(`/api/history/${item.id}`);
+  if (state.doc !== item.id || !$("v-body").classList.contains("with-history")) return;
   const draw = () => {
-    list.replaceChildren(el("button", { className: "version", textContent: "Current document", onclick: () => { state.version = ""; showDoc(item); draw(); } }));
+    list.replaceChildren(el("button", { className: "version", textContent: "Current document", onclick: () => { state.version = null; showDoc(item); draw(); } }));
     list.firstChild.setAttribute("aria-current", String(!state.version));
-    [...versions].reverse().forEach((version, index) => {
-      
-      const button = el("button", { className: "version", onclick: () => { state.version = version.id; showDoc(item); draw(); } },
+    [...versions].reverse().forEach(version => {
+      const button = el("button", { className: "version", onclick: () => { state.version = version; showDoc(item); draw(); } },
         el("span", { textContent: new Date(version.when).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) }),
         el("small", { textContent: `${version.changed_pages.length} page${version.changed_pages.length === 1 ? "" : "s"} changed` }));
-      button.setAttribute("aria-current", String(state.version === version.id));
+      button.setAttribute("aria-current", String(state.version?.id === version.id));
       list.append(button);
     });
     if (!versions.length) list.append(el("p", { textContent: "No versions yet. Sync to start keeping history." }));
-    $("restore").hidden = !state.version;
   };
   draw();
 }
@@ -945,13 +952,12 @@ async function loadStatus() {
   $("v-ai").hidden = !s.ai;
   if (was && was.ai !== s.ai) renderGrid();
   $("send").disabled = !s.set_up;  // sending works without the tablet: it is kept until the tablet connects
-  $("new-folder").disabled = !s.connected || !s.set_up;
+  for (const id of ["new-folder", "v-rename", "v-move", "v-trash", "restore"]) $(id).disabled = !canChange();
   if (was && s.outbox < was.outbox && !state.removedWaiting) toast(s.outbox ? `Sent to the tablet · ${s.outbox} still waiting` : "Everything waiting was sent to the tablet");
   state.removedWaiting = false;
   $("outbox").hidden = !s.outbox;
   $("outbox").textContent = `${s.outbox} waiting to send`;
-  if (s.last_sync && state.lastSync && s.last_sync !== state.lastSync) loadLibrary(true);  // a background sync finished
-  state.lastSync = s.last_sync;
+  if (was && s.last_sync && s.last_sync !== was.last_sync) loadLibrary(true);
   const notice = $("notice");
   notice.hidden = s.set_up;
   if (!s.set_up) notice.innerHTML = "One-time step: run <code>python -m openmarker setup</code> in a terminal to authorise this computer.";
@@ -1041,7 +1047,7 @@ $("settings-form").onsubmit = async event => {
     calendar: $("set-calendar").value, markdown_dir: $("set-md-dir").value, markdown_tag: $("set-md-tag").value,
     ai_enabled: $("set-ai").checked, ai_model: $("set-ai-model").value, ai_answer_tag: $("set-ai-tag").value,
     ai_effort: $("set-ai-effort").value, ai_fallback: $("set-ai-fallback").checked,
-    ...Object.fromEntries(Object.entries(NUMBER_FIELDS).map(([name, id]) => [name, Number($(id).value)])),
+    ...Object.fromEntries(Object.entries(NUMBER_FIELDS).map(([name, id]) => [name, $(id).valueAsNumber])),
     agenda_folder: $("set-dest-agenda").value, ai_summary_folder: $("set-dest-summary").value, ai_answer_folder: $("set-dest-answer").value,
     ...(key ? { ai_key: key } : settings.clearKey ? { ai_key_clear: true } : {}),
   }).catch(error => ({ ok: false, error: error.message }));
@@ -1067,10 +1073,25 @@ $("search").oninput = event => {
 
 // Menus
 document.querySelectorAll(".menu").forEach(menu => {
-  menu.querySelector("button").onclick = event => { event.stopPropagation(); menu.classList.toggle("open"); menu.querySelector("button").setAttribute("aria-expanded", String(menu.classList.contains("open"))); };
+  const trigger = menu.querySelector("button");
+  const list = menu.querySelector(".menu-list");
+  trigger.onclick = event => {
+    event.stopPropagation();
+    const wasOpen = menu.classList.contains("open");
+    closeMenus();
+    if (wasOpen) return;
+    list.style.translate = "";
+    menu.classList.add("open");
+    const { left, right } = list.getBoundingClientRect();
+    const viewport = document.documentElement.clientWidth;
+    const shift = Math.max(8 - left, Math.min(0, viewport - 8 - right));
+    list.style.translate = `${shift}px`;
+    trigger.setAttribute("aria-expanded", "true");
+  };
 });
 function closeMenus() { document.querySelectorAll(".menu.open").forEach(m => { m.classList.remove("open"); m.querySelector("button").setAttribute("aria-expanded", "false"); }); }
 addEventListener("click", closeMenus);
+addEventListener("resize", closeMenus);
 addEventListener("keydown", event => { if (event.key === "Escape" && document.querySelector(".menu.open")) { event.preventDefault(); const trigger = document.querySelector(".menu.open > button"); closeMenus(); trigger.focus(); } });
 addEventListener("unhandledrejection", event => { event.preventDefault(); toast(event.reason?.message || "Could not reach the app. Try again."); });
 
@@ -1093,37 +1114,50 @@ async function sendFiles(files) {
 $("send-file").onclick = () => $("file").click();
 
 // Pictures: preview the cleaned-up result before sending.
-const picture = { file: null, url: null, timer: null };
+const picture = { file: null, url: null, timer: null, revision: 0, approvedQuery: null };
 const imageQuery = () => `mode=${$("image-mode").value}&tolerance=${$("image-tolerance").value}`;
-async function previewImage() {
-  const asked = imageQuery();
-  $("image-caption").textContent = { cutout: "Working…", ink: "Tracing the drawing… this takes about 15 seconds" }[$("image-mode").value] || "Working… the first cut-out can take a while";
+function invalidateImagePreview() {
+  clearTimeout(picture.timer);
+  picture.approvedQuery = null;
   $("image-send").disabled = true;
-  const res = await fetch(`/api/image-preview?${asked}`, { method: "POST", body: picture.file });
-  if (asked !== imageQuery() || !$("image-sheet").open) return;
-  if (!res.ok || !(res.headers.get("Content-Type") || "").startsWith("image/")) {
-    $("image-caption").textContent = (await res.json().catch(() => ({}))).error || "This file couldn't be read as a picture.";
-    $("image-send").disabled = true;
+  return ++picture.revision;
+}
+async function previewImage() {
+  const revision = invalidateImagePreview();
+  const asked = imageQuery();
+  const isCurrent = () => picture.revision === revision && $("image-sheet").open;
+  $("image-caption").textContent = { cutout: "Working…", ink: "Tracing the drawing… this takes about 15 seconds" }[$("image-mode").value] || "Working… the first cut-out can take a while";
+  let blob, applied;
+  try {
+    const res = await fetch(`/api/image-preview?${asked}`, { method: "POST", body: picture.file });
+    if (!isCurrent()) return;
+    if (!res.ok || !(res.headers.get("Content-Type") || "").startsWith("image/")) {
+      const { error } = await res.json().catch(() => ({}));
+      if (isCurrent()) $("image-caption").textContent = error || "This file couldn't be read as a picture.";
+      return;
+    }
+    blob = await res.blob();
+    applied = res.headers.get("X-Applied-Mode") || "";
+  } catch {
+    if (isCurrent()) $("image-caption").textContent = "Could not load the preview. Change an option to try again.";
     return;
   }
-  const applied = res.headers.get("X-Applied-Mode") || "";
+  if (!isCurrent()) return;
   if (applied.startsWith("ink:")) {
     $("image-caption").textContent = `On the tablet · a notebook page of ${Number(applied.slice(4)).toLocaleString()} pen strokes`;
-    $("image-tolerance-row").hidden = true;
-    $("image-send").disabled = false;
-    if ($("image-after").src.startsWith("blob:")) URL.revokeObjectURL($("image-after").src);
-    $("image-after").src = URL.createObjectURL(await res.blob());
-    return;
+  } else {
+    const label = { subject: "subject cut out", cutout: "plain backdrop removed", paper: "paper flattened", keep: "left as it is" }[applied] || "";
+    $("image-caption").textContent = `On the tablet · ${label}`;
   }
-  const label = { subject: "subject cut out", cutout: "plain backdrop removed", paper: "paper flattened", keep: "left as it is" }[applied] || "";
-  $("image-caption").textContent = `On the tablet · ${label}`;
   $("image-tolerance-row").hidden = applied !== "cutout";
-  $("image-send").disabled = false;
   if ($("image-after").src.startsWith("blob:")) URL.revokeObjectURL($("image-after").src);
-  $("image-after").src = URL.createObjectURL(await res.blob());
+  $("image-after").src = URL.createObjectURL(blob);
+  picture.approvedQuery = asked;
+  $("image-send").disabled = false;
 }
 function openImage(file) {
   if (picture.url) URL.revokeObjectURL(picture.url);
+  if ($("image-after").src.startsWith("blob:")) URL.revokeObjectURL($("image-after").src);
   picture.file = file;
   picture.url = URL.createObjectURL(file);
   $("image-before").src = picture.url;
@@ -1138,11 +1172,17 @@ function openImage(file) {
   previewImage();
 }
 $("image-mode").onchange = previewImage;
-$("image-tolerance").oninput = () => { clearTimeout(picture.timer); picture.timer = setTimeout(previewImage, 200); };
+$("image-tolerance").oninput = () => {
+  invalidateImagePreview();
+  $("image-caption").textContent = "Updating preview…";
+  picture.timer = setTimeout(previewImage, 200);
+};
 $("image-sheet").addEventListener("close", () => {
-  if ($("image-sheet").returnValue !== "ok" || !picture.file) return;
+  const approvedQuery = picture.approvedQuery;
+  invalidateImagePreview();
+  if ($("image-sheet").returnValue !== "ok" || !picture.file || approvedQuery !== imageQuery()) return;
   const name = $("image-name").value.trim() || "Picture";
-  const query = `name=${encodeURIComponent(name)}&parent=${currentFolder()}&${imageQuery()}`;
+  const query = `name=${encodeURIComponent(name)}&parent=${currentFolder()}&${approvedQuery}`;
   const file = picture.file;
   act(`Sending ${name} to the tablet…`, async () => (await fetch(`/api/upload-image?${query}`, { method: "POST", body: file })).json(), "Picture sent to the tablet");
 });
@@ -1150,7 +1190,7 @@ $("send-image").onclick = () => $("image-file").click();
 $("image-file").onchange = event => { if (event.target.files[0]) openImage(event.target.files[0]); event.target.value = ""; };
 $("file").onchange = event => { sendFiles(event.target.files); event.target.value = ""; };
 $("send-url").onclick = async () => {
-  const url = await ask({ title: "Send a web page", text: "The page is saved as a PDF and sent to the current folder.", value: "https://", ok: "Send" });
+  const url = await ask({ title: "Send a web page", text: "The page is saved as a PDF and sent to the current folder.", inputType: "url", value: "https://", ok: "Send" });
   if (url) act("Saving the page and sending it…", () => api("/api/send-url", { url, parent: currentFolder() }), "Sent to the tablet");
 };
 $("send-agenda").onclick = () => act("Making today's page…", () => api("/api/agenda", {}), "Agenda page sent");
@@ -1257,7 +1297,11 @@ const chatPlace = () => state.byId.get(chat.within);
 function openChat(within, question) {
   if (within !== undefined) {
     const id = within?.id || "";
-    if (id !== chat.within && chat.messages.length) { chat.busy?.abort(); chat.messages = []; }
+    if (id !== chat.within && chat.messages.length) {
+      chat.busy?.abort();
+      chat.busy = null;
+      chat.messages = [];
+    }
     chat.within = id;
   }
   if (chat.within && !chatPlace()) chat.within = "";  // it was removed meanwhile
@@ -1285,36 +1329,39 @@ function renderChat() {
       el("div", { className: "ai-sources" }, ...starters.map(text => el("button", { className: "pill", textContent: text, onclick: () => chatSend(text) })))));
     return;
   }
-  log.replaceChildren(...chat.messages.map((message, index) => {
-    if (message.role === "user") return el("div", { className: "chat-msg user", textContent: message.content });
-    message.node = para("ai-out", message.content);
-    if (message.pending && !message.content) { message.node.textContent = "Reading your notes…"; message.node.classList.add("waiting"); }
-    const done = !message.pending && message.content;
-    return el("div", { className: "chat-msg assistant" }, ...[
-      message.node,
-      message.error ? para("ai-error", message.error) : null,
-      message.sources?.length ? el("div", { className: "ai-sources" }, ...message.sources.map(source =>
-        el("button", { className: "pill", textContent: `[${source.cite}] ${source.name} · page ${source.number}`, title: "Open this page", onclick: () => {
-          chat.returnTo = true;  // come back to the chat when the page is closed
-          $("chat").close();
-          location.hash = `doc/${source.doc}/${source.page}`;
-        } }))) : null,
-      message.note ? para("ai-note", message.note) : null,
-      done ? el("div", { className: "chat-tools" },
-        el("button", { textContent: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(message.content); toast("Copied"); } catch { toast("Couldn't copy."); } } }),
-        el("button", { textContent: "Send to tablet", disabled: !canSend(), onclick: () => chatToTablet(index) })) : null,
-    ].filter(Boolean));
-  }));
+  log.replaceChildren(...chat.messages.map((message, index) => message.role === "user"
+    ? el("div", { className: "chat-msg user", textContent: message.content })
+    : renderReply(message, index)));
   log.scrollTop = log.scrollHeight;
+}
+function renderReply(message, index) {
+  message.node = para("ai-out", message.content);
+  if (message.pending && !message.content) { message.node.textContent = "Reading your notes…"; message.node.classList.add("waiting"); }
+  const done = !message.pending && message.complete && message.content.trim();
+  return el("div", { className: "chat-msg assistant" }, ...[
+    message.node,
+    message.error ? para("ai-error", message.error) : null,
+    message.sources?.length ? el("div", { className: "ai-sources" }, ...message.sources.map(source =>
+      el("button", { className: "pill", textContent: `[${source.cite}] ${source.name} · page ${source.number}`, title: "Open this page", onclick: () => {
+        chat.returnTo = true;  // come back to the chat when the page is closed
+        $("chat").close();
+        location.hash = `doc/${source.doc}/${source.page}`;
+      } }))) : null,
+    message.note ? para("ai-note", message.note) : null,
+    done ? el("div", { className: "chat-tools" },
+      el("button", { textContent: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(message.content); toast("Copied"); } catch { toast("Couldn't copy."); } } }),
+      el("button", { textContent: "Send to tablet", disabled: !canSend(), onclick: () => chatToTablet(index) })) : null,
+  ].filter(Boolean));
 }
 async function chatSend(text) {
   text = text.trim();
   if (!text || chat.busy) return;
-  const reply = { role: "assistant", content: "", sources: [], note: "", pending: true };
+  const reply = { role: "assistant", content: "", sources: [], note: "", pending: true, complete: false };
   // Questions and replies are kept in pairs; a pair whose reply failed is left out of what is sent.
   const history = [];
   for (let i = 0; i + 1 < chat.messages.length; i += 2) {
-    if (chat.messages[i + 1].content) history.push({ role: "user", content: chat.messages[i].content }, { role: "assistant", content: chat.messages[i + 1].content });
+    const previous = chat.messages[i + 1];
+    if (previous.complete && previous.content.trim()) history.push({ role: "user", content: chat.messages[i].content }, { role: "assistant", content: previous.content });
   }
   history.push({ role: "user", content: text });
   chat.messages.push({ role: "user", content: text }, reply);
@@ -1329,7 +1376,11 @@ async function chatSend(text) {
       reply.node.classList.remove("waiting");
       reply.node.textContent = reply.content;
       if (atEnd) log.scrollTop = log.scrollHeight;
-    } else if (event.type === "done") { reply.sources = event.sources; reply.note = event.note; }
+    } else if (event.type === "done") {
+      reply.complete = true;
+      reply.sources = event.sources;
+      reply.note = event.note;
+    }
     else if (event.type === "error") reply.error = event.error;
   };
   try {
@@ -1346,13 +1397,24 @@ async function chatSend(text) {
       if (done) break;
     }
   } catch (error) {
+    reply.complete = false;
     if (error.name === "AbortError") reply.note = "Stopped.";
     else reply.error = error.message === "Failed to fetch" ? "Could not reach the app. Try again." : error.message;
   }
   reply.pending = false;
+  if (reply.error) reply.complete = false;
+  if (!reply.complete && !reply.note && !reply.error) reply.error = "The reply ended early. Try again.";
   if (chat.busy === control) chat.busy = null;
-  if (!reply.content && !reply.error) reply.error = reply.note === "Stopped." ? "Stopped before anything was written." : "No reply came back. Try again.";
-  if (chat.messages.includes(reply)) renderChat();
+  if (!reply.content.trim() && !reply.error) reply.error = reply.note === "Stopped." ? "Stopped before anything was written." : "No reply came back. Try again.";
+  const index = chat.messages.indexOf(reply);
+  if (index !== -1) {
+    const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+    const position = log.scrollTop;
+    const previous = reply.node.parentElement;
+    previous.replaceWith(renderReply(reply, index));
+    $("chat-send").textContent = "Send";
+    log.scrollTop = atEnd ? log.scrollHeight : position;
+  }
 }
 function chatToTablet(index) {
   const reply = chat.messages[index], question = chat.messages[index - 1]?.content || "";
@@ -1394,7 +1456,7 @@ async function tidy(folder) {
 }
 $("v-history").onclick = showHistory;
 $("v-text").onclick = () => {
-  if (state.version) { state.version = ""; $("v-body").classList.remove("with-history"); state.textMode = true; return showDoc(viewed()); }
+  if (state.version) { state.version = null; $("v-body").classList.remove("with-history"); state.textMode = true; return showDoc(viewed()); }
   setTextMode(!state.textMode);
 };
 $("v-rename").onclick = async () => { if (await rename(viewed())) route(); };
@@ -1402,8 +1464,9 @@ $("v-move").onclick = () => move(viewed());
 $("v-trash").onclick = async () => { if (await trash(viewed())) $("viewer").close(); };
 $("restore").onclick = async () => {
   const item = viewed();
+  const snapshot = state.version.id;
   const sure = await ask({ title: "Restore this version?", text: "It is added to the tablet as a new copy. The current document is not changed.", ok: "Restore as a copy" });
-  if (sure) act("Restoring a copy to the tablet…", () => api("/api/restore", { id: item.id, snapshot: state.version }), "Restored as a copy");
+  if (sure) act("Restoring a copy to the tablet…", () => api("/api/restore", { id: item.id, snapshot }), "Restored as a copy");
 };
 $("close").onclick = () => $("viewer").close();
 $("viewer").addEventListener("close", () => { if (location.hash.startsWith("#doc/")) location.hash = state.folder; });

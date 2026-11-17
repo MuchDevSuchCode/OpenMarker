@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from openmarker import library, server
+from openmarker import history, library, server, tablet
 
 
 class LibraryTests(unittest.TestCase):
@@ -27,6 +27,37 @@ class LibraryTests(unittest.TestCase):
         for value in (None, 123, [], {}):
             with self.assertRaises(server.UserError):
                 server._text({"name": value}, "name")
+
+
+class HistoryPreviewTests(unittest.TestCase):
+    def test_preview_uses_the_snapshot_page_order_and_pdf(self):
+        doc = "00000000-0000-0000-0000-000000000001"
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as directory:
+            root = Path(directory)
+            mirror = root / "mirror"
+            mirror.mkdir()
+            content = mirror / f"{doc}.content"
+            pdf = mirror / f"{doc}.pdf"
+            content.write_text(json.dumps({
+                "pages": ["kept", "deleted", "inserted"],
+                "redirectionPageMap": [2, 0, -1],
+            }))
+            pdf.write_bytes(b"historical PDF")
+            with patch.object(history, "root", return_value=root / "history"):
+                snapshot = history.record(mirror, tablet.local_hashes(mirror))
+                content.write_text(json.dumps({"pages": ["kept", "new"], "redirectionPageMap": [0, 1]}))
+                pdf.write_bytes(b"current PDF")
+                version, = history.versions(doc)
+                self.assertEqual(version["pages"], ["kept", "deleted", "inserted"])
+                self.assertEqual(version["source_pages"], {"kept": 2, "deleted": 0})
+                self.assertTrue(version["has_pdf"])
+                historical_pdf = server._preview_pdf(mirror, doc, snapshot.stem)
+                self.assertEqual(historical_pdf.read_bytes(), b"historical PDF")
+                with patch.object(server, "store_dir", return_value=(mirror, "mirror")), patch.object(
+                    server, "_source_size", return_value=(500, 800)
+                ) as source_size:
+                    server.page_svg(doc, "kept", {"at": [snapshot.stem], "over": ["2"]})
+                source_size.assert_called_once_with(str(historical_pdf), historical_pdf.stat().st_mtime, 2)
 
 
 class RequestTests(unittest.TestCase):

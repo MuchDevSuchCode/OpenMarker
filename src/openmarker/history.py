@@ -11,6 +11,8 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import library
+
 
 def root() -> Path:
     return Path.home() / "openmarker" / "history"
@@ -73,7 +75,12 @@ def versions(doc: str) -> list[dict]:
                 for p, d in files.items()
                 if p.endswith(".rm") and (previous or {}).get(p) != d
             )
-            out.append({"id": snapshot.stem, "when": _when(snapshot), "changed_pages": changed})
+            digest = files.get(f"{doc}.content")
+            _, pages, source_pages = library.read_content(_blob(digest)) if digest else ({}, [], {})
+            out.append({
+                "id": snapshot.stem, "when": _when(snapshot), "changed_pages": changed,
+                "pages": pages, "source_pages": source_pages, "has_pdf": f"{doc}.pdf" in files,
+            })
         if files:
             previous = files
     return out

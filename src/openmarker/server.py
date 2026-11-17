@@ -355,15 +355,26 @@ def _page(path: str, mtime: float) -> scene.Page:
     return scene.load(Path(path))
 
 
+def _preview_pdf(store: Path, doc: str, snapshot: str) -> Path | None:
+    if not snapshot:
+        return store / f"{doc}.pdf"
+    if SNAPSHOT.fullmatch(snapshot):
+        return history.files_at(doc, snapshot).get(f"{doc}.pdf")
+    return None
+
+
 def page_svg(doc: str, page_id: str, query: dict) -> bytes:
     """One page as SVG. Query: at=<snapshot>, q=<search words>, over=<source page number>."""
     store, _ = store_dir()
-    rm = store / doc / f"{page_id}.rm"
     snapshot = query.get("at", [""])[0]
+    rm = store / doc / f"{page_id}.rm"
+    pdf = store / f"{doc}.pdf"
     if snapshot and SNAPSHOT.fullmatch(snapshot):
-        rm = history.files_at(doc, snapshot).get(f"{doc}/{page_id}.rm", Path("missing"))
+        files = history.files_at(doc, snapshot)
+        rm = files.get(f"{doc}/{page_id}.rm")
+        pdf = files.get(f"{doc}.pdf")
     try:
-        page = _page(str(rm), rm.stat().st_mtime) if rm.exists() else scene.Page()
+        page = _page(str(rm), rm.stat().st_mtime) if rm and rm.exists() else scene.Page()
     except Exception:  # a page we cannot parse should not break the view
         page = scene.Page()
     words = query.get("q", [""])[0].lower().split()
@@ -372,8 +383,7 @@ def page_svg(doc: str, page_id: str, query: dict) -> bytes:
         boxes = [h["boxes"] for h in ocr.search(" ".join(words)) if h["doc"] == doc and h["page"] == page_id]
         boxes = [tuple(b) for group in boxes for b in group]
     over = query.get("over", [""])[0]
-    pdf = store / f"{doc}.pdf"
-    if over.isdigit() and pdf.exists():
+    if over.isdigit() and pdf and pdf.exists():
         # Drawn on top of a rendered original page: no paper, framed to that page.
         width, height = _source_size(str(pdf), pdf.stat().st_mtime, int(over))
         scale, x0 = export.source_fit(width, height, page.paper[1])
@@ -825,9 +835,12 @@ class Handler(BaseHTTPRequestHandler):
                 self._json({"error": "not found"}, 404)
         elif (m := match["pdf"]) and (store / f"{m[1]}.pdf").exists():
             self._send((store / f"{m[1]}.pdf").read_bytes(), "application/pdf", cache=True)
-        elif (m := match["source"]) and (store / f"{m[1]}.pdf").exists():
-            pdf = store / f"{m[1]}.pdf"
+        elif m := match["source"]:
             try:
+                pdf = _preview_pdf(store, m[1], query.get("at", [""])[0])
+                if not pdf or not pdf.is_file():
+                    self._json({"error": "not found"}, 404)
+                    return
                 self._send(_source_png(str(pdf), pdf.stat().st_mtime, int(m[2])), "image/png", cache=True)
             except Exception:
                 self._json({"error": "not found"}, 404)

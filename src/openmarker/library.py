@@ -94,6 +94,19 @@ def _page_tags(content: dict) -> dict[str, list[str]]:
     return out
 
 
+def read_content(path: Path) -> tuple[dict, list[str], dict[str, int]]:
+    try:
+        content = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(content, dict):
+            return {}, [], {}
+        page_ids, source_pages = _pages(content)
+    except (ValueError, OSError, TypeError, KeyError, AttributeError):
+        return {}, [], {}
+    page_ids = list(dict.fromkeys(p for p in page_ids if isinstance(p, str)))
+    source_pages = {p: n for p, n in source_pages.items() if p in page_ids and type(n) is int and n >= 0}
+    return content, page_ids, source_pages
+
+
 def load(store: Path | None = None) -> dict[str, Item]:
     store = Path(store) if store else default_store()
     items: dict[str, Item] = {}
@@ -106,16 +119,7 @@ def load(store: Path | None = None) -> dict[str, Item]:
             continue
         if meta.get("deleted"):
             continue
-        content_path = meta_path.with_suffix(".content")
-        try:
-            content = json.loads(content_path.read_text(encoding="utf-8")) if content_path.exists() else {}
-            if not isinstance(content, dict):
-                content = {}
-            page_ids, source_pages = _pages(content)
-        except (ValueError, OSError, TypeError, KeyError, AttributeError):
-            content, page_ids, source_pages = {}, [], {}
-        page_ids = list(dict.fromkeys(p for p in page_ids if isinstance(p, str)))
-        source_pages = {p: n for p, n in source_pages.items() if p in page_ids and type(n) is int and n >= 0}
+        content, page_ids, source_pages = read_content(meta_path.with_suffix(".content"))
         items[meta_path.stem] = Item(
             id=meta_path.stem,
             name=meta.get("visibleName") if isinstance(meta.get("visibleName"), str) and meta["visibleName"].strip() else "Untitled",
