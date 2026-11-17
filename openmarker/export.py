@@ -50,13 +50,13 @@ def _ink_layer(page: scene.Page, width: float, height: float, scale: float, x0: 
     return PdfReader(buffer)
 
 
-def source_fit(pdf_width: float, pdf_height: float) -> tuple[float, float]:
+def source_fit(pdf_width: float, pdf_height: float, paper_height: float = scene.PAGE_HEIGHT) -> tuple[float, float]:
     """How the tablet fits an original page into its page area.
 
     Returns (scale from page units to PDF points, x position of page-unit 0).
     The original page is fitted to the page area's height and centred.
     """
-    scale = pdf_height / scene.PAGE_HEIGHT
+    scale = pdf_height / paper_height
     return scale, pdf_width / 2
 
 
@@ -72,7 +72,7 @@ def pdf(item: library.Item) -> bytes:
         if source is not None and number is not None and number < len(source.pages):
             original = source.pages[number]
             width, height = float(original.mediabox.width), float(original.mediabox.height)
-            scale, x0 = source_fit(width, height)
+            scale, x0 = source_fit(width, height, page.paper[1])
             out = writer.add_page(original)
             if page.strokes or page.text:
                 layer = _ink_layer(page, width, height, scale, x0, height).pages[0]
@@ -83,7 +83,7 @@ def pdf(item: library.Item) -> bytes:
             layer = _ink_layer(page, width, height, NOTEBOOK_SCALE, -page.left * NOTEBOOK_SCALE, height + page.top * NOTEBOOK_SCALE)
             out = writer.add_page(layer.pages[0])
             out.mediabox = RectangleObject((0, 0, width, height))
-    writer.add_metadata({"/Title": item.name, "/Creator": "openmarker"})
+    writer.add_metadata({"/Title": item.name, "/Creator": "OpenMarker"})
     buffer = io.BytesIO()
     writer.write(buffer)
     return buffer.getvalue()

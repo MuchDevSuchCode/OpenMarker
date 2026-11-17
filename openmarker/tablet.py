@@ -10,10 +10,15 @@ import hashlib
 import io
 import json
 import re
+import socket
 import subprocess
 import tarfile
 import time
+import urllib.error
+import urllib.request
 import uuid
+import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -39,15 +44,23 @@ def key_path() -> Path:
     return Path.home() / "openmarker" / "id_ed25519"
 
 
-def _ssh(host: str, command: str, stdin: bytes | None = None, use_key: bool = True) -> bytes:
-    args = ["ssh", "-o", "ConnectTimeout=10"]
+def _ssh_args(use_key: bool = True) -> list[str]:
+    # The tablet is recognised by its own key, whatever address it has today:
+    # its Wi-Fi address changes, and USB and Wi-Fi are the same device.
+    args = ["ssh", "-o", "ConnectTimeout=10", "-o", "HostKeyAlias=openmarker-tablet",
+            "-o", f"UserKnownHostsFile={key_path().with_name('known_hosts')}",
+            "-o", "StrictHostKeyChecking=accept-new"]
     if use_key:
         # BatchMode makes a rejected key fail fast instead of hanging on a prompt.
         args += ["-i", str(key_path()), "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes"]
     else:
-        args += ["-o", "PubkeyAuthentication=no", "-o", "StrictHostKeyChecking=accept-new"]
+        args += ["-o", "PubkeyAuthentication=no"]
+    return args
+
+
+def _ssh(host: str, command: str, stdin: bytes | None = None, use_key: bool = True) -> bytes:
     proc = subprocess.run(
-        args + [f"root@{host}", command], input=stdin, stdout=subprocess.PIPE, check=False
+        _ssh_args(use_key) + [f"root@{host}", command], input=stdin, stdout=subprocess.PIPE, check=False
     )
     if proc.returncode != 0:
         hint = " (if the key was rejected, run `openmarker setup` again)" if use_key else ""
@@ -57,6 +70,21 @@ def _ssh(host: str, command: str, stdin: bytes | None = None, use_key: bool = Tr
 
 def is_set_up() -> bool:
     return key_path().exists()
+
+
+def is_ours(host: str) -> bool:
+    """Whether the device at this address is the tablet that was set up.
+
+    True only if it presents the tablet's recorded key and accepts ours, so
+    another machine that happens to have the address is never mistaken for it.
+    """
+    if not is_set_up() or not key_path().with_name("known_hosts").exists():
+        return False
+    proc = subprocess.run(
+        _ssh_args() + ["-o", "ConnectTimeout=4", f"root@{host}", "true"],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    return proc.returncode == 0
 
 
 def setup(host: str = USB_HOST) -> None:
@@ -138,9 +166,12 @@ def pull(host: str = USB_HOST, mirror: Path | None = None, prune: bool = False) 
 
 # ---- changing things on the tablet ----------------------------------------
 #
-# The tablet's own app only reads its document store at startup, so every
-# change here is followed by restarting that app (a few seconds of blank
-# screen). Its sync service then carries the change to the cloud as usual.
+# New documents are handed to the tablet app's own upload service (the "USB
+# web interface" setting), which adds them while the app keeps running. When
+# that service is off, and for every other change, the files are written
+# into the store directly; the app only reads its store at startup, so it is
+# then restarted, which blanks and locks the screen for a few seconds.
+# Either way the tablet's sync service carries the change to the cloud.
 
 _ID = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 UPLOAD_TYPES = {".pdf": "pdf", ".epub": "epub"}
@@ -178,6 +209,72 @@ def restart_app(host: str) -> None:
     _ssh(host, "systemctl restart xochitl")
 
 
+WEB_SERVICE = (USB_HOST, 80)  # where the tablet app's upload service listens, as seen from the tablet
+
+
+@contextmanager
+def _web_service(host: str):
+    """Base URL of the tablet's upload service, or None if it is not running.
+
+    The service only listens on the tablet's USB address, so over Wi-Fi it is
+    reached through an SSH tunnel.
+    """
+    with socket.socket() as probe:  # pick a free local port
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    tunnel = subprocess.Popen(
+        _ssh_args() + ["-N", "-o", "ExitOnForwardFailure=yes",
+                       "-L", f"127.0.0.1:{port}:{WEB_SERVICE[0]}:{WEB_SERVICE[1]}", f"root@{host}"],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    try:
+        base = f"http://127.0.0.1:{port}"
+        deadline = time.time() + 20
+        while time.time() < deadline and tunnel.poll() is None:
+            try:
+                urllib.request.urlopen(f"{base}/documents/", timeout=15).read()
+                break
+            except (OSError, urllib.error.URLError):
+                time.sleep(0.3)
+        else:
+            base = None
+        yield base
+    finally:
+        tunnel.terminate()
+        tunnel.wait()
+
+
+def web_upload(host: str, filename: str, data: bytes, parent: str = "") -> bool:
+    """Hand a file to the tablet app's upload service. False if the service is off.
+
+    The document appears on the tablet straight away, named after the file,
+    with no restart.
+    """
+    _check_id(parent, allow=("",))
+    with _web_service(host) as base:
+        if base is None:
+            return False
+        # The service puts uploads in the folder that was listed last.
+        urllib.request.urlopen(f"{base}/documents/{parent}", timeout=30).read()
+        boundary = uuid.uuid4().hex
+        safe = filename.replace('"', "'").replace(chr(13), " ").replace(chr(10), " ")
+        crlf = chr(13) + chr(10)
+        head = (f"--{boundary}{crlf}"
+                f'Content-Disposition: form-data; name="file"; filename="{safe}"{crlf}'
+                f"Content-Type: application/octet-stream{crlf}{crlf}")
+        tail = f"{crlf}--{boundary}--{crlf}"
+        request = urllib.request.Request(
+            f"{base}/upload", data=head.encode("utf-8") + data + tail.encode("utf-8"),
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}",
+                     "Origin": base, "Referer": f"{base}/"},
+        )
+        try:
+            urllib.request.urlopen(request, timeout=300).read()
+        except urllib.error.HTTPError as exc:
+            raise RuntimeError(f"the tablet refused the file ({exc.code}): {exc.read()[:200]!r}") from exc
+        return True
+
+
 def _metadata(name: str, parent: str, folder: bool) -> bytes:
     now = _now_ms()
     meta = {
@@ -200,6 +297,8 @@ def upload(host: str, name: str, data: bytes, kind: str, parent: str = "", resta
     if kind not in UPLOAD_TYPES.values():
         raise ValueError("only PDF and EPUB files can be sent")
     _check_id(parent, allow=("",))
+    if web_upload(host, f"{name.replace('/', '-')}.{kind}", data, parent):
+        return ""  # the tablet chose the id
     doc = str(uuid.uuid4())
     content = {
         "extraMetadata": {},
@@ -277,6 +376,25 @@ def move(host: str, doc: str, parent: str) -> None:
 
 def trash(host: str, doc: str) -> None:
     edit_metadata(host, doc, parent="trash")
+
+
+def add_files(host: str, files: dict[str, bytes], restart: bool = True) -> None:
+    """Add a complete new document given as its files (store-relative paths)."""
+    for path in files:
+        _check_id(path.split("/")[0].split(".")[0])
+    meta = next((json.loads(d) for p, d in files.items() if p.endswith(".metadata")), None)
+    if meta and meta.get("parent") != "trash":
+        # The same files zipped up are the tablet's own document archive format.
+        archive = io.BytesIO()
+        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
+            for path, data in files.items():
+                z.writestr(path, data)
+        name = str(meta.get("visibleName", "Document")).replace("/", "-")
+        if web_upload(host, f"{name}.rmdoc", archive.getvalue(), meta.get("parent", "")):
+            return
+    _write(host, files)
+    if restart:
+        restart_app(host)
 
 
 def add_copy(host: str, doc: str, files: dict[str, bytes], name: str, restart: bool = True) -> str:

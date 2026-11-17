@@ -121,6 +121,15 @@ def cmd_send(args: argparse.Namespace) -> None:
         path = Path(args.source)
         kind = tablet.UPLOAD_TYPES.get(path.suffix.lower())
         name, data = path.stem, path.read_bytes()
+        if path.suffix.lower() in images.SUFFIXES and args.as_ink:
+            from . import ink
+
+            picture, _ = images.clean(data, "keep")
+            strokes = ink.trace(picture, detail=args.detail)
+            _, files = ink.notebook_files(args.name or name, strokes)
+            tablet.add_files(host, files)
+            print(f"sent {args.name or name!r} as a notebook page with {len(strokes)} pen strokes")
+            return
         if path.suffix.lower() in images.SUFFIXES:
             picture, applied = images.clean(data, args.background, args.tolerance)
             print(f"background: {applied}")
@@ -194,6 +203,9 @@ def main() -> None:
     send.add_argument("--background", choices=("auto", "subject", "cutout", "paper", "keep"), default="auto",
                       help="for pictures: cut out the main subject with a local model (subject), remove a plain "
                            "backdrop (cutout), flatten a photo of paper (paper), or leave as is")
+    send.add_argument("--as-ink", action="store_true",
+                      help="for drawings: trace the picture into real pen strokes on a notebook page")
+    send.add_argument("--detail", type=float, default=1.0, help="with --as-ink: below 1 gives fewer, coarser strokes")
     send.add_argument("--tolerance", type=float, default=40, help="for cutout: how far from the backdrop colour still counts (1-200)")
     send.add_argument("source", help="file path or web address")
     send.add_argument("--name", help="name to show on the tablet")

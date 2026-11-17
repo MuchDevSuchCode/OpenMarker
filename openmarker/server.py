@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import export, generate, history, images, library, ocr, render, scene, tablet, workflow
+from . import export, generate, history, images, ink, library, ocr, render, scene, tablet, workflow
 
 PORT = 8737
 AUTO_SYNC_SECONDS = 30
@@ -49,14 +49,42 @@ def store_dir() -> tuple[Path, str]:
 def require_tablet() -> str:
     if not tablet.is_set_up():
         raise UserError("Run setup first: python -m openmarker setup")
-    host, _ = workflow.find_tablet()
+    host = _seen[0] or workflow.find_tablet()[0]
     if host is None:
         raise UserError("The tablet isn't reachable. Wake it and connect USB or Wi-Fi.")
     return host
 
 
+_seen: tuple[str | None, str | None] = (None, None)  # the tablet's address and link, kept current by _watch_tablet
+WATCH_SECONDS = 5
+DISCOVER_SECONDS = 30  # how often to search the network while the tablet is missing
+
+
+def _watch_tablet() -> None:
+    """Notice the tablet coming and going, find it again when its Wi-Fi
+    address has changed, and sync as soon as it appears (if auto-sync is on)."""
+    global _seen
+    searched = 0.0
+    while True:
+        try:
+            host, via = workflow.find_tablet()
+            if host and host != _seen[0] and tablet.is_set_up() and not tablet.is_ours(host):
+                host, via = None, None  # something else has that address
+            if not host and tablet.is_set_up() and time.time() - searched > DISCOVER_SECONDS:
+                searched = time.time()
+                host = workflow.discover()
+                via = "Wi-Fi" if host else None
+            arrived = host is not None and _seen[0] is None
+            _seen = (host, via)
+            if arrived and tablet.is_set_up() and workflow.load_config().get("auto_sync"):
+                sync(wait=False)
+        except Exception:  # the watcher must never take the server down
+            pass
+        time.sleep(WATCH_SECONDS)
+
+
 def status() -> dict:
-    host, via = workflow.find_tablet()
+    host, via = _seen
     config = workflow.load_config()
     return {
         "set_up": tablet.is_set_up(),
@@ -155,7 +183,7 @@ def page_svg(doc: str, page_id: str, query: dict) -> bytes:
     if over.isdigit() and pdf.exists():
         # Drawn on top of a rendered original page: no paper, framed to that page.
         width, height = _source_size(str(pdf), pdf.stat().st_mtime, int(over))
-        scale, x0 = export.source_fit(width, height)
+        scale, x0 = export.source_fit(width, height, page.paper[1])
         framed = scene.Page(page.strokes, page.text, -x0 / scale, 0.0, (width - x0) / scale, height / scale)
         return render.svg(framed, background=False, highlights=boxes).encode("utf-8")
     return render.svg(page, highlights=boxes).encode("utf-8")
@@ -250,6 +278,24 @@ def cleaned_image(raw: bytes, query: dict):
         raise UserError("That file couldn't be read as a picture.") from exc
 
 
+_traced: tuple[int, list] | None = None  # the last picture traced, so sending reuses the preview's work
+
+
+def traced_strokes(raw: bytes) -> list:
+    """Pen strokes for a drawing (see ink.trace). Slow, so the latest result is kept."""
+    global _traced
+    key = hash(raw)
+    if _traced is None or _traced[0] != key:
+        if not raw:
+            raise UserError("That picture is empty.")
+        try:
+            picture, _ = images.clean(raw, "keep")
+        except (ValueError, OSError) as exc:
+            raise UserError("That file couldn't be read as a picture.") from exc
+        _traced = (key, ink.trace(picture))
+    return _traced[1]
+
+
 def change(action: str, body: dict, raw: bytes = b"", query: dict | None = None) -> dict:
     """Operations that write to the tablet. Each ends with a sync so the UI is current."""
     host = require_tablet()
@@ -264,6 +310,11 @@ def change(action: str, body: dict, raw: bytes = b"", query: dict | None = None)
                 raise UserError("That file is empty.")
             parent = query.get("parent", [""])[0]
             tablet.upload(host, Path(name).stem[:200], raw, tablet.UPLOAD_TYPES[suffix], _id({"p": parent}, "p", ("",)))
+        elif action == "upload-image" and query.get("mode", [""])[0] == "ink":
+            name = query.get("name", ["Drawing"])[0].strip()[:200] or "Drawing"
+            parent = query.get("parent", [""])[0]
+            _, files = ink.notebook_files(name, traced_strokes(raw), _id({"p": parent}, "p", ("",)))
+            tablet.add_files(host, files)
         elif action == "upload-image":
             name = Path(query.get("name", ["Picture"])[0].strip()).stem[:200] or "Picture"
             picture, _ = cleaned_image(raw, query)
@@ -424,7 +475,11 @@ class Handler(BaseHTTPRequestHandler):
                 return
         try:
             if action == "image-preview":
-                picture, applied = cleaned_image(raw, parse_qs(url.query))
+                if parse_qs(url.query).get("mode", [""])[0] == "ink":
+                    strokes = traced_strokes(raw)
+                    picture, applied = ink.preview(strokes), f"ink:{len(strokes)}"
+                else:
+                    picture, applied = cleaned_image(raw, parse_qs(url.query))
                 self.send_response(200)
                 body_png = images.preview_png(picture)
                 self.send_header("Content-Type", "image/png")
@@ -460,8 +515,9 @@ def serve(port: int = PORT, open_browser: bool = True) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     threading.Thread(target=_index_existing, daemon=True).start()
     threading.Thread(target=_auto_sync_loop, daemon=True).start()
+    threading.Thread(target=_watch_tablet, daemon=True).start()
     url = f"http://127.0.0.1:{port}/"
-    print(f"openmarker is running at {url}  (Ctrl+C to stop)")
+    print(f"OpenMarker is running at {url}  (Ctrl+C to stop)")
     if open_browser:
         webbrowser.open(url)
     try:

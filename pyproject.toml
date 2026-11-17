@@ -1,7 +1,7 @@
 [project]
 name = "openmarker"
 version = "0.1.0"
-description = "Open, local-first companion for e-ink paper tablets"
+description = "OpenMarker: an open, local-first companion for e-ink paper tablets"
 requires-python = ">=3.12"
 dependencies = [
     "rmscene>=0.8",

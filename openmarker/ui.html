@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>openmarker</title>
+<title>OpenMarker</title>
 <style>
   :root {
     --paper: #f3f0e8; --surface: #fbfaf6; --ink: #1d1c1a; --muted: #6f6a60;
@@ -205,7 +205,7 @@
 </head>
 <body>
 <aside id="sidebar">
-  <div class="brand">open<span>marker</span><button id="nav-toggle" class="pill" aria-expanded="false" aria-controls="nav device-panel">Library &amp; tablet</button></div>
+  <div class="brand">Open<span>Marker</span><button id="nav-toggle" class="pill" aria-expanded="false" aria-controls="nav device-panel">Library &amp; tablet</button></div>
   <nav id="nav" aria-label="Folders"></nav>
   <div class="device" id="device-panel">
     <div class="device-row"><span class="dot" id="dot"></span><span id="conn">Looking for tablet…</span></div>
@@ -291,9 +291,10 @@
       <figure><figcaption>Original</figcaption><div class="frame"><img id="image-before" alt="Original picture"></div></figure>
       <figure><figcaption id="image-caption">On the tablet</figcaption><div class="frame page"><img id="image-after" alt="Picture as it will be sent"></div></figure>
     </div>
-    <label class="field">Background
+    <label class="field">Treatment
       <select id="image-mode">
         <option value="auto">Automatic</option>
+        <option value="ink">Trace into real pen strokes (for drawings)</option>
         <option value="subject" id="image-subject">Cut out the subject (AI, on this computer)</option>
         <option value="cutout">Remove a plain backdrop</option>
         <option value="paper">Flatten a photo of paper or a whiteboard</option>
@@ -623,7 +624,9 @@ async function loadLibrary() {
 }
 
 async function loadStatus() {
+  const was = state.status;
   const s = state.status = await api("/api/status");
+  if (was && was.connected !== s.connected) toast(s.connected ? `Tablet connected · ${s.via}` : "Tablet disconnected");
   $("dot").classList.toggle("on", s.connected);
   $("conn").textContent = s.connected ? `Tablet connected · ${s.via}` : "Tablet not connected";
   $("last").textContent = s.last_sync ? `Last synced ${ago(s.last_sync)}` : "Not synced yet";
@@ -705,7 +708,8 @@ const picture = { file: null, url: null, timer: null };
 const imageQuery = () => `mode=${$("image-mode").value}&tolerance=${$("image-tolerance").value}`;
 async function previewImage() {
   const asked = imageQuery();
-  $("image-caption").textContent = $("image-mode").value === "cutout" ? "Working…" : "Working… the first cut-out can take a while";
+  $("image-caption").textContent = { cutout: "Working…", ink: "Tracing the drawing… this takes about 15 seconds" }[$("image-mode").value] || "Working… the first cut-out can take a while";
+  $("image-send").disabled = true;
   const res = await fetch(`/api/image-preview?${asked}`, { method: "POST", body: picture.file });
   if (asked !== imageQuery() || !$("image-sheet").open) return;
   if (!res.ok || !(res.headers.get("Content-Type") || "").startsWith("image/")) {
@@ -713,7 +717,15 @@ async function previewImage() {
     $("image-send").disabled = true;
     return;
   }
-  const applied = res.headers.get("X-Applied-Mode");
+  const applied = res.headers.get("X-Applied-Mode") || "";
+  if (applied.startsWith("ink:")) {
+    $("image-caption").textContent = `On the tablet · a notebook page of ${Number(applied.slice(4)).toLocaleString()} pen strokes`;
+    $("image-tolerance-row").hidden = true;
+    $("image-send").disabled = false;
+    if ($("image-after").src.startsWith("blob:")) URL.revokeObjectURL($("image-after").src);
+    $("image-after").src = URL.createObjectURL(await res.blob());
+    return;
+  }
   const label = { subject: "subject cut out", cutout: "plain backdrop removed", paper: "paper flattened", keep: "left as it is" }[applied] || "";
   $("image-caption").textContent = `On the tablet · ${label}`;
   $("image-tolerance-row").hidden = applied !== "cutout";

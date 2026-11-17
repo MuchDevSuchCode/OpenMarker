@@ -98,6 +98,7 @@ class Page:
     top: float = PAGE_TOP
     right: float = PAGE_LEFT + PAGE_WIDTH
     bottom: float = PAGE_TOP + PAGE_HEIGHT
+    paper: tuple[float, float] = (PAGE_WIDTH, PAGE_HEIGHT)  # the device's page size
 
     @property
     def width(self) -> float:
@@ -204,6 +205,10 @@ def _walk(group: si.Group, dx: float, dy: float, anchors: dict, page: Page) -> N
 def read(stream: BinaryIO) -> Page:
     tree = read_tree(stream)
     page = Page()
+    size = getattr(getattr(tree, "scene_info", None), "paper_size", None)
+    if size:  # newer devices record their (larger) page size in the file
+        page.paper = (float(size[0]), float(size[1]))
+        page.left, page.right, page.bottom = -size[0] / 2, size[0] / 2, float(size[1])
     anchors = _layout_text(tree.root_text, page)
     _walk(tree.root, 0.0, 0.0, anchors, page)
     return page

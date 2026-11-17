@@ -24,7 +24,7 @@ def calendar_events(source: str, day: date) -> list[tuple[str, str, str]]:
 
     if source.lower().startswith(("http://", "https://", "webcal://")):
         url = source.replace("webcal://", "https://", 1)
-        request = urllib.request.Request(url, headers={"User-Agent": "openmarker"})
+        request = urllib.request.Request(url, headers={"User-Agent": "OpenMarker"})
         with urllib.request.urlopen(request, timeout=30) as response:
             raw = response.read()
     else:
