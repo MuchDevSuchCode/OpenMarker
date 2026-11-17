@@ -138,6 +138,12 @@
   .chat-tools { display: flex; gap: 14px; margin-top: 8px; }
   .chat-tools button { border: 0; background: none; padding: 0; min-height: 0; color: var(--muted); font-size: 12.5px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
   .chat-tools button:disabled { opacity: .5; cursor: default; }
+  #outbox { display: block; margin: 2px 0 10px 29px; padding: 0; min-height: 0; text-align: left; }
+  .waiting-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+  .waiting-row span { flex: 1; min-width: 0; }
+  .waiting-row b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .waiting-row small { color: var(--muted); }
+  .waiting-row small.ai-error { display: block; }
   .chat-empty { margin: auto; text-align: center; max-width: 440px; }
   .chat-empty .ai-sources { justify-content: center; margin-top: 14px; }
   .chat-form { display: flex; gap: 10px; align-items: flex-end; padding: 12px 18px 8px; border-top: 1px solid var(--line); }
@@ -290,6 +296,7 @@
   <div class="device" id="device-panel">
     <div class="device-row"><span class="dot" id="dot"></span><span id="conn">Looking for tablet…</span></div>
     <small id="last">&nbsp;</small>
+    <button class="set-link" id="outbox" hidden aria-haspopup="dialog"></button>
     <button class="btn primary" id="sync" disabled>Sync now</button>
     <div class="notice" id="notice" hidden></div>
     <button class="btn quiet" id="open-settings" aria-haspopup="dialog"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>Settings</button>
@@ -523,7 +530,9 @@ async function act(message, request, done) {
   let result;
   try { result = await request(); } catch { result = { ok: false, error: "Something went wrong talking to the app." }; }
   $("busy").hidePopover();
-  if (result.ok) { toast(done); await loadLibrary(); } else toast(result.error || "That didn't work.");
+  if (result.ok && result.queued) toast("The tablet isn't connected. Kept, and sent as soon as it is.");
+  else if (result.ok) { toast(result.send_error || done); await loadLibrary(); }
+  else toast(result.error || "That didn't work.");
   loadStatus();
   return result.ok;
 }
@@ -739,14 +748,14 @@ function itemMenu(item) {
 }
 // What can be done in a folder itself: the empty space of the library, or "My files" in the sidebar.
 function placeMenu(folder) {
-  const disabled = !canChange();
+  const disabled = !canChange(), noSend = !canSend();
   const send = id => () => { if (state.folder !== folder) go(folder); $(id).click(); };
   return [
     ["New folder…", () => newFolder(folder), { disabled }],
     "-",
-    ["Send a PDF or EPUB file…", send("send-file"), { disabled }],
-    ["Send a picture…", send("send-image"), { disabled }],
-    ["Send a web page…", send("send-url"), { disabled }],
+    ["Send a PDF or EPUB file…", send("send-file"), { disabled: noSend }],
+    ["Send a picture…", send("send-image"), { disabled: noSend }],
+    ["Send a web page…", send("send-url"), { disabled: noSend }],
     ...(state.status?.ai ? ["-",
       folder ? ["✦ Ask about this folder…", () => openChat(state.byId.get(folder))] : ["✦ Chat with your notes…", () => openChat(null)],
       ["✦ Suggest names and folders", () => tidy(folder)],
@@ -935,7 +944,12 @@ async function loadStatus() {
   $("ai-menu").hidden = !s.ai;
   $("v-ai").hidden = !s.ai;
   if (was && was.ai !== s.ai) renderGrid();
-  for (const id of ["send", "new-folder"]) $(id).disabled = !s.connected || !s.set_up;
+  $("send").disabled = !s.set_up;  // sending works without the tablet: it is kept until the tablet connects
+  $("new-folder").disabled = !s.connected || !s.set_up;
+  if (was && s.outbox < was.outbox && !state.removedWaiting) toast(s.outbox ? `Sent to the tablet · ${s.outbox} still waiting` : "Everything waiting was sent to the tablet");
+  state.removedWaiting = false;
+  $("outbox").hidden = !s.outbox;
+  $("outbox").textContent = `${s.outbox} waiting to send`;
   if (s.last_sync && state.lastSync && s.last_sync !== state.lastSync) loadLibrary(true);  // a background sync finished
   state.lastSync = s.last_sync;
   const notice = $("notice");
@@ -950,7 +964,8 @@ $("sync").onclick = async () => {
   button.dataset.busy = ""; button.textContent = "Sync now";
   if (result.ok) {
     const answered = result.answered ? ` · ${result.answered} answer${result.answered === 1 ? "" : "s"} sent` : "";
-    toast(result.ai_error || (result.fetched || result.removed || answered ? `Synced: ${result.fetched} file${result.fetched === 1 ? "" : "s"} updated${answered}` : "Already up to date"));
+    const sent = result.sent ? ` · ${result.sent} waiting document${result.sent === 1 ? "" : "s"} sent` : "";
+    toast(result.send_error || result.ai_error || (result.fetched || result.removed || answered || sent ? `Synced: ${result.fetched} file${result.fetched === 1 ? "" : "s"} updated${answered}${sent}` : "Already up to date"));
     await loadLibrary();
   } else {
     toast(result.error || "Sync failed");
@@ -1063,7 +1078,7 @@ addEventListener("unhandledrejection", event => { event.preventDefault(); toast(
 async function sendFiles(files) {
   const wanted = [...files].filter(f => /\.(pdf|epub)$/i.test(f.name));
   if (!wanted.length) return toast("Only PDF and EPUB files can be sent.");
-  if (!state.status?.connected || !state.status?.set_up) return toast("Connect and set up the tablet before sending files.");
+  if (!state.status?.set_up) return toast("Set up the tablet before sending files.");
   if (wanted.some(f => f.size > 500 * 1024 * 1024 || !f.size)) return toast("Choose non-empty files smaller than 500 MB.");
   const parent = currentFolder();
   await act(`Sending ${wanted.length === 1 ? wanted[0].name : `${wanted.length} files`} to the tablet…`, async () => {
@@ -1140,6 +1155,32 @@ $("send-url").onclick = async () => {
 };
 $("send-agenda").onclick = () => act("Making today's page…", () => api("/api/agenda", {}), "Agenda page sent");
 $("new-folder").onclick = () => newFolder(currentFolder());
+// What was sent while the tablet was away, waiting for it.
+const canSend = () => Boolean(state.status?.set_up);
+async function showWaiting() {
+  const { items } = await api("/api/outbox");
+  const size = bytes => bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  const kind = { pdf: "PDF", epub: "EPUB", notebook: "Notebook" };
+  const rows = items.map(item => el("div", { className: "waiting-row" },
+    el("span", {}, ...[
+      el("b", { textContent: item.name, title: item.name }),
+      el("small", { textContent: `${kind[item.kind]} · ${size(item.size)} · added ${ago(item.added)}` }),
+      item.error ? el("small", { className: "ai-error", textContent: `${item.stuck ? "Stopped trying" : "Last try failed"}: ${item.error}` }) : null,
+    ].filter(Boolean)),
+    el("button", { className: "pill", textContent: "Remove", onclick: async () => {
+      await api("/api/outbox-remove", { id: item.id });
+      state.removedWaiting = true;
+      await loadStatus();
+      if (state.status.outbox) showWaiting(); else $("ai-sheet").close();
+    } })));
+  aiSheet("Waiting to send", [
+    para("", !items.length ? "Nothing is waiting."
+      : state.status?.connected ? "These go to the tablet with the next sync."
+      : "These go to the tablet as soon as it connects. They are kept on this computer until then."),
+    ...rows,
+  ], state.status?.connected && items.length ? [el("button", { className: "pill accent", textContent: "Send now", onclick: () => { $("ai-sheet").close(); $("sync").click(); } })] : []);
+}
+$("outbox").onclick = showWaiting;
 let dragDepth = 0;
 addEventListener("dragenter", event => { if (event.dataTransfer?.types.includes("Files")) { dragDepth++; document.body.classList.add("drop"); } });
 addEventListener("dragleave", () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove("drop"); } });
@@ -1189,7 +1230,7 @@ async function summarise(item) {
     r.note ? para("ai-note", r.note) : null,
   ], [
     el("button", { className: "pill", textContent: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(text); toast("Copied"); } catch { toast("Couldn't copy."); } } }),
-    el("button", { className: "pill accent", textContent: "Send to tablet", disabled: !canChange(), onclick: async () => {
+    el("button", { className: "pill accent", textContent: "Send to tablet", disabled: !canSend(), onclick: async () => {
       $("ai-sheet").close();
       await act("Sending the summary to the tablet…", () => api("/api/ai/summary-send", { id: item.id, title: r.title, summary: r.summary, actions: r.actions }), "Summary sent to the tablet");
     } }),
@@ -1261,7 +1302,7 @@ function renderChat() {
       message.note ? para("ai-note", message.note) : null,
       done ? el("div", { className: "chat-tools" },
         el("button", { textContent: "Copy", onclick: async () => { try { await navigator.clipboard.writeText(message.content); toast("Copied"); } catch { toast("Couldn't copy."); } } }),
-        el("button", { textContent: "Send to tablet", disabled: !canChange(), title: canChange() ? "" : "Connect the tablet first", onclick: () => chatToTablet(index) })) : null,
+        el("button", { textContent: "Send to tablet", disabled: !canSend(), onclick: () => chatToTablet(index) })) : null,
     ].filter(Boolean));
   }));
   log.scrollTop = log.scrollHeight;

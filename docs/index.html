@@ -288,7 +288,7 @@
         <li>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 3L10 14"/><path d="M21 3l-7 18-4-7-7-4z"/></svg>
           <h3>Send to tablet</h3>
-          <p>PDFs, EPUBs, web pages, pictures and a daily agenda page from your calendar, without restarting the tablet's app.</p>
+          <p>PDFs, EPUBs, web pages, pictures and a daily agenda page from your calendar, without restarting the tablet's app. Tablet asleep? What you send is kept and goes out when it next connects.</p>
         </li>
         <li>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.500" cy="9.500" r="1.500"/><path d="M21 15l-5-5-9 9"/></svg>
@@ -622,6 +622,7 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
           <tbody>
             <tr><td><code>mirror/</code></td><td>The copy of the tablet's documents.</td></tr>
             <tr><td><code>history/</code></td><td>Snapshots for version history.</td></tr>
+            <tr><td><code>outbox/</code></td><td>Documents sent while the tablet was away, until they are delivered.</td></tr>
             <tr><td><code>index.db</code></td><td>Recognised handwriting, for search.</td></tr>
             <tr><td><code>config.json</code></td><td>Settings.</td></tr>
             <tr><td><code>id_ed25519</code></td><td>The SSH key that unlocks your tablet. Treat it like a password.</td></tr>

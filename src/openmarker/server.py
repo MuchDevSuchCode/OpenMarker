@@ -7,13 +7,14 @@ import re
 import threading
 import time
 import webbrowser
+import zipfile
 from datetime import date
 from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import ai, export, generate, history, images, ink, library, ocr, render, scene, tablet, workflow
+from . import ai, export, generate, history, images, ink, library, ocr, outbox, render, scene, tablet, workflow
 
 PORT = 8737
 AUTO_SYNC_SECONDS = 30
@@ -55,6 +56,83 @@ def require_tablet() -> str:
     return host
 
 
+def _pack(files: dict[str, bytes]) -> bytes:
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as z:
+        for path, data in files.items():
+            z.writestr(path, data)
+    return archive.getvalue()
+
+
+def _deliver(host: str, name: str, kind: str, data: bytes, parent: str = "", setting: str = "") -> None:
+    """Put one document on the tablet. `setting` names a folder setting that, if filled in, decides where."""
+    if setting:
+        parent = destination(host, setting, parent)
+    if kind == "notebook":
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            files = {path: z.read(path) for path in z.namelist()}
+        for path in files:
+            if path.endswith(".metadata"):  # the folder may have been decided since the notebook was made
+                meta = json.loads(files[path])
+                meta["parent"] = parent
+                files[path] = json.dumps(meta, indent=4).encode("utf-8")
+        tablet.add_files(host, files)
+    else:
+        tablet.upload(host, name, data, kind, parent)
+
+
+def send(name: str, kind: str, data: bytes, parent: str = "", setting: str = "") -> bool:
+    """Send a document to the tablet, or keep it for later if the tablet can't be reached.
+
+    Returns whether it was delivered now. What is kept goes out with the next sync.
+    """
+    if not tablet.is_set_up():
+        raise UserError("Run setup first: python -m openmarker setup")
+    host = _seen[0] or workflow.find_tablet()[0]
+    if host:
+        try:
+            _deliver(host, name, kind, data, parent, setting)
+            return True
+        except (RuntimeError, OSError):
+            if workflow.find_tablet()[0]:  # still there, so it is a real failure and not the tablet going away
+                raise
+    outbox.add(name, kind, data, parent, setting)
+    return False
+
+
+def _send_waiting(host: str, retry: bool) -> dict:
+    """Deliver what is in the outbox. Returns {"sent": how many, "send_error": what went wrong, if anything}."""
+    waiting = [e for e in outbox.entries() if retry or e.get("tries", 0) < outbox.MAX_TRIES]
+    if not waiting:
+        return {}
+    items = library.load(tablet.default_mirror())
+    sent, error = 0, ""
+    for entry in waiting:
+        parent = entry.get("parent", "")
+        place = items.get(parent)
+        if place is None or not place.is_folder or ai._trashed(place, items):
+            parent = ""  # the folder is gone, or was trashed, since this was queued
+        try:
+            _deliver(host, entry["name"], entry["kind"], outbox.data(entry["id"]), parent, entry.get("setting", ""))
+        except (RuntimeError, OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
+            if not workflow.find_tablet()[0]:
+                break  # the tablet went away again; nothing is wrong with the document
+            outbox.failed(entry["id"], str(exc))
+            error = f"“{entry['name']}” could not be sent: {exc}"
+            continue
+        outbox.remove(entry["id"])
+        sent += 1
+    return {"sent": sent, **({"send_error": error} if error else {})}
+
+
+def outbox_json() -> dict:
+    return {"items": [
+        {"id": e["id"], "name": e["name"], "kind": e["kind"], "size": e.get("size", 0), "added": e.get("added", ""),
+         "error": e.get("error", ""), "stuck": e.get("tries", 0) >= outbox.MAX_TRIES}
+        for e in outbox.entries()
+    ]}
+
+
 _seen: tuple[str | None, str | None] = (None, None)  # the tablet's address and link, kept current by _watch_tablet
 WATCH_SECONDS = 5
 DISCOVER_SECONDS = 15  # how often to look the tablet up by name while it is missing
@@ -62,7 +140,8 @@ DISCOVER_SECONDS = 15  # how often to look the tablet up by name while it is mis
 
 def _watch_tablet() -> None:
     """Notice the tablet coming and going, find it again by name when its
-    Wi-Fi address has changed, and sync as soon as it appears (if auto-sync is on)."""
+    Wi-Fi address has changed, and sync as soon as it appears (if auto-sync is
+    on, or something is waiting to be sent)."""
     global _seen
     searched = 0.0
     while True:
@@ -78,7 +157,7 @@ def _watch_tablet() -> None:
             if arrived and tablet.is_set_up():
                 workflow.remember_name(host)
             _seen = (host, via)
-            if arrived and tablet.is_set_up() and workflow.load_config().get("auto_sync"):
+            if arrived and tablet.is_set_up() and (workflow.load_config().get("auto_sync") or outbox.waiting()):
                 sync(wait=False)
         except Exception:  # the watcher must never take the server down
             pass
@@ -99,6 +178,7 @@ def status() -> dict:
         "handwriting_search": ocr.available(),
         "subject_cutout": images.subject_available(),
         "ai": ai.enabled(),
+        "outbox": len(outbox.entries()),
     }
 
 
@@ -323,6 +403,10 @@ def search_json(query: str) -> dict:
 
 
 def sync(wait: bool = True) -> dict:
+    """Fetch what changed on the tablet, and deliver what is waiting to be sent.
+
+    A sync that was asked for (`wait`) also retries documents that had stopped being retried.
+    """
     host = require_tablet()
     if not _sync_lock.acquire(blocking=wait):
         raise UserError("A sync is already running.")
@@ -333,14 +417,15 @@ def sync(wait: bool = True) -> dict:
             history.record(mirror, tablet.local_hashes(mirror))
         result, report = workflow.sync(host, prune=True)
         answers = _answer_tagged(host)
-        if answers.get("answered"):
+        delivered = _send_waiting(host, retry=wait)
+        if answers.get("answered") or delivered.get("sent"):
             time.sleep(2)  # let the tablet take the new documents in, then fetch them
             workflow.sync(host, prune=True)
     except RuntimeError as exc:
         raise UserError(f"Sync failed: {exc}") from exc
     finally:
         _sync_lock.release()
-    return {"ok": True, "fetched": len(result.fetched), "removed": len(result.stale), **report, **answers}
+    return {"ok": True, "fetched": len(result.fetched), "removed": len(result.stale), **report, **answers, **delivered}
 
 
 def _answer_tagged(host: str) -> dict:
@@ -378,9 +463,10 @@ def _answer_tagged(host: str) -> dict:
 
 
 def ai_action(action: str, body: dict) -> dict:
-    """The AI features (see ai.py). Only the two that end in a change touch the tablet."""
+    """The AI features (see ai.py). Only the ones that end in a change touch the tablet."""
     store, _ = store_dir()
     items = library.load(store)
+    delivered = True
 
     def document() -> library.Item:
         item = items.get(_id(body, "id"))
@@ -404,16 +490,15 @@ def ai_action(action: str, body: dict) -> dict:
         if action == "ai/tidy":
             return {"ok": True, **ai.tidy(items, _id(body, "folder", ("",)))}
         if action == "ai/summary-send":
-            item, host = document(), require_tablet()
+            item = document()
             actions = body.get("actions", [])
             if not isinstance(actions, list) or len(actions) > 100 or not all(isinstance(a, str) and len(a) <= 1000 for a in actions):
                 raise UserError("Those actions can't be sent.")
             pdf = generate.text_pdf(words("title", 200) or "Summary", words("summary", 20000),
                                     kicker=f"Summary · {item.name}", checklist=[a for a in actions if a.strip()])
             beside = item.parent if item.parent in items else ""
-            tablet.upload(host, f"{item.name} – summary", pdf, "pdf", destination(host, "ai_summary_folder", beside))
+            delivered = send(f"{item.name} – summary", "pdf", pdf, beside, "ai_summary_folder")
         elif action == "ai/chat-send":
-            host = require_tablet()
             answer = words("answer", 60000)
             if not answer:
                 raise UserError("There is nothing to send.")
@@ -428,7 +513,7 @@ def ai_action(action: str, body: dict) -> dict:
             title = (question[:57].rstrip() + "…") if len(question) > 58 else (question or "From your notes")
             pdf = generate.text_pdf(title, answer, kicker=f"Chat · {place.name}" if place else "Chat · your notes")
             name = "".join(c for c in title if c not in '\\/:*?"<>|').strip() or "Chat answer"
-            tablet.upload(host, f"{name} – answer", pdf, "pdf", destination(host, "ai_answer_folder", beside))
+            delivered = send(f"{name} – answer", "pdf", pdf, beside, "ai_answer_folder")
         elif action == "ai/tidy-apply":
             host = require_tablet()
             changes = body.get("changes")
@@ -462,6 +547,8 @@ def ai_action(action: str, body: dict) -> dict:
         raise UserError(str(exc)) from exc
     except (ValueError, RuntimeError, KeyError, OSError) as exc:
         raise UserError(str(exc)) from exc
+    if not delivered:
+        return {"ok": True, "queued": True}
     time.sleep(2)  # give the tablet's app a moment before reading its files
     return sync()
 
@@ -482,7 +569,7 @@ def _auto_sync_loop() -> None:
     while True:
         time.sleep(AUTO_SYNC_SECONDS)
         try:
-            if workflow.load_config().get("auto_sync") and tablet.is_set_up() and workflow.find_tablet()[0]:
+            if (workflow.load_config().get("auto_sync") or outbox.waiting()) and tablet.is_set_up() and workflow.find_tablet()[0]:
                 sync(wait=False)
         except Exception:  # background sync must never take the server down
             pass
@@ -570,9 +657,19 @@ def traced_strokes(raw: bytes) -> list:
 
 
 def change(action: str, body: dict, raw: bytes = b"", query: dict | None = None) -> dict:
-    """Operations that write to the tablet. Each ends with a sync so the UI is current."""
-    host = require_tablet()
+    """Operations that write to the tablet. Each ends with a sync so the UI is current.
+
+    Sending a document works without the tablet: it is kept and goes out when
+    the tablet is next reached. Everything else needs the tablet now.
+    """
     query = query or {}
+    delivered = True
+    if action == "outbox-remove":
+        try:
+            outbox.remove(str(body.get("id", "")))
+        except ValueError as exc:
+            raise UserError("Unknown document.") from exc
+        return {"ok": True, **outbox_json()}
     try:
         if action == "upload":
             name = query.get("name", [""])[0].strip()
@@ -582,29 +679,30 @@ def change(action: str, body: dict, raw: bytes = b"", query: dict | None = None)
             if not raw:
                 raise UserError("That file is empty.")
             parent = query.get("parent", [""])[0]
-            tablet.upload(host, Path(name).stem[:200], raw, tablet.UPLOAD_TYPES[suffix], _id({"p": parent}, "p", ("",)))
+            delivered = send(Path(name).stem[:200], tablet.UPLOAD_TYPES[suffix], raw, _id({"p": parent}, "p", ("",)))
         elif action == "upload-image" and query.get("mode", [""])[0] == "ink":
             name = query.get("name", ["Drawing"])[0].strip()[:200] or "Drawing"
             parent = query.get("parent", [""])[0]
-            _, files = ink.notebook_files(name, traced_strokes(raw), _id({"p": parent}, "p", ("",)))
-            tablet.add_files(host, files)
+            parent = _id({"p": parent}, "p", ("",))
+            _, files = ink.notebook_files(name, traced_strokes(raw), parent)
+            delivered = send(name, "notebook", _pack(files), parent)
         elif action == "upload-image":
             name = Path(query.get("name", ["Picture"])[0].strip()).stem[:200] or "Picture"
             picture, _ = cleaned_image(raw, query)
             parent = query.get("parent", [""])[0]
-            tablet.upload(host, name, images.page_pdf(picture, name), "pdf", _id({"p": parent}, "p", ("",)))
+            delivered = send(name, "pdf", images.page_pdf(picture, name), _id({"p": parent}, "p", ("",)))
         elif action == "send-url":
             title, data = generate.web_page_pdf(str(body.get("url", "")).strip())
-            tablet.upload(host, title, data, "pdf", _id(body, "parent", ("",)))
+            delivered = send(title, "pdf", data, _id(body, "parent", ("",)))
         elif action == "agenda":
             today = date.today()
             source = workflow.load_config().get("calendar")
             events = generate.calendar_events(source, today) if source else None
-            tablet.upload(host, f"Agenda {today.isoformat()}", generate.agenda_pdf(today, events), "pdf", destination(host, "agenda_folder"))
+            delivered = send(f"Agenda {today.isoformat()}", "pdf", generate.agenda_pdf(today, events), "", "agenda_folder")
         elif action == "folder":
-            tablet.new_folder(host, _text(body, "name"), _id(body, "parent", ("",)))
+            tablet.new_folder(require_tablet(), _text(body, "name"), _id(body, "parent", ("",)))
         elif action == "rename":
-            tablet.rename(host, _id(body, "id"), _text(body, "name"))
+            tablet.rename(require_tablet(), _id(body, "id"), _text(body, "name"))
         elif action == "move":
             target, doc = _id(body, "parent", ("",)), _id(body, "id")
             items = library.load(store_dir()[0])
@@ -613,9 +711,9 @@ def change(action: str, body: dict, raw: bytes = b"", query: dict | None = None)
                 if walker == doc:
                     raise UserError("A folder can't be moved inside itself.")
                 walker = items[walker].parent
-            tablet.move(host, doc, target)
+            tablet.move(require_tablet(), doc, target)
         elif action == "trash":
-            tablet.trash(host, _id(body, "id"))
+            tablet.trash(require_tablet(), _id(body, "id"))
         elif action == "restore":
             doc, snapshot = _id(body, "id"), str(body.get("snapshot", ""))
             if not SNAPSHOT.fullmatch(snapshot):
@@ -623,11 +721,13 @@ def change(action: str, body: dict, raw: bytes = b"", query: dict | None = None)
             files = {path: blob.read_bytes() for path, blob in history.files_at(doc, snapshot).items()}
             meta = json.loads(files[f"{doc}.metadata"])
             stamp = f"{snapshot[:4]}-{snapshot[4:6]}-{snapshot[6:8]} {snapshot[9:11]}:{snapshot[11:13]}"
-            tablet.add_copy(host, doc, files, f"{meta.get('visibleName', 'Document')} (restored {stamp})")
+            tablet.add_copy(require_tablet(), doc, files, f"{meta.get('visibleName', 'Document')} (restored {stamp})")
         else:
             raise UserError("Unknown action.")
     except (ValueError, RuntimeError, KeyError, OSError) as exc:
         raise UserError(str(exc)) from exc
+    if not delivered:
+        return {"ok": True, "queued": True}
     time.sleep(2)  # give the tablet's app a moment to come back before reading its files
     return sync()
 
@@ -690,6 +790,8 @@ class Handler(BaseHTTPRequestHandler):
             self._json(library_json())
         elif path == "/api/status":
             self._json(status())
+        elif path == "/api/outbox":
+            self._json(outbox_json())
         elif path == "/api/config":
             self._json(settings_json())
         elif path == "/api/search":

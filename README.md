@@ -33,7 +33,9 @@ or supported by the tablet's manufacturer.
 - **Export.** PDF with your ink over the original pages, plain text, or
   Markdown notes written into a folder of your choice after each sync.
 - **Send to tablet.** PDFs, EPUBs, web pages, a daily agenda page from a
-  calendar, and pictures, without restarting the tablet's app.
+  calendar, and pictures, without restarting the tablet's app. If the tablet
+  is asleep or away, what you send is kept and goes out by itself the next
+  time the tablet connects; "waiting to send" in the sidebar lists it.
 - **Picture import.** Remove a plain backdrop, flatten a photo of paper, or
   cut out the subject with a local AI model.
 - **Trace a drawing into real pen strokes.** Turns a line drawing into a
@@ -184,6 +186,7 @@ Everything stays in the `openmarker` folder in your home directory:
 | --- | --- |
 | `mirror/` | The copy of the tablet's documents. |
 | `history/` | Snapshots for version history. |
+| `outbox/` | Documents sent while the tablet was away, until they are delivered. |
 | `index.db` | Recognised handwriting, for search. |
 | `config.json` | Settings (below). |
 | `id_ed25519` | The SSH key that unlocks your tablet. Treat it like a password. |
