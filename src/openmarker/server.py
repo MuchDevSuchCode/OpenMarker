@@ -400,7 +400,7 @@ def ai_action(action: str, body: dict) -> dict:
         if action == "ai/summary":
             return {"ok": True, **ai.summarise(document())}
         if action == "ai/ask":
-            return {"ok": True, **ai.ask_notes(words("question", 2000), items)}
+            return {"ok": True, **ai.ask_notes(words("question", 2000), items, within=_id(body, "within", ("",)) if body.get("within") else "")}
         if action == "ai/tidy":
             return {"ok": True, **ai.tidy(items, _id(body, "folder", ("",)))}
         if action == "ai/summary-send":

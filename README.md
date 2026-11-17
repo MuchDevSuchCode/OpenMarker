@@ -116,6 +116,11 @@ nothing is sent until you use one.
 | **Suggest names and folders** | *AI* menu | The names and opening text of the documents in the current folder, and your folder names. Nothing changes until you apply the suggestions you ticked. |
 | **Answer tagged pages** | Set a tag under Settings › AI | After a sync, a picture of each page carrying that tag. The answer arrives as a document next to the notebook. A page is answered again only if it changes. |
 
+The first four are also in the right-click menu of a document or folder.
+There, *Ask about this document* (or *folder*) keeps the question to the
+recognised text of that one document or folder, and *Suggest names and
+folders* works on the folder you clicked.
+
 *Answer tagged pages* is the only feature that runs by itself, and only for
 pages you tagged on the tablet. It runs when you sync from the browser (or
 automatic sync does), not from `launch pull`. Leave its tag empty to keep it

@@ -677,11 +677,18 @@ function itemMenu(item) {
   const disabled = !canChange();
   const open = ["Open", () => item.folder ? go(item.id) : openDoc(item)];
   if (isTrashed(item)) return [open, item.parent === "trash" && "-", item.parent === "trash" && ["Put back in My files", () => putBack(item), { disabled }]];
+  const withAI = state.status?.ai ? ["-",
+    !item.folder && ["✦ Summarise and list actions", () => summarise(item)],
+    !item.folder && ["✦ Read the handwriting with AI", () => improveText(item)],
+    [item.folder ? "✦ Ask about this folder…" : "✦ Ask about this document…", () => askNotes("", item)],
+    item.folder && ["✦ Suggest names and folders", () => tidy(item.id)],
+  ] : [];
   return [
     open,
     item.folder
       ? ["New folder inside…", () => newFolder(item.id), { disabled }]
       : [item.type === "epub" ? "Download EPUB" : "Export PDF", () => download(item)],
+    ...withAI,
     "-",
     ["Rename…", () => rename(item), { disabled }],
     ["Move…", () => move(item), { disabled }],
@@ -702,6 +709,10 @@ function placeMenu(folder) {
     ["Send a PDF or EPUB file…", send("send-file"), { disabled }],
     ["Send a picture…", send("send-image"), { disabled }],
     ["Send a web page…", send("send-url"), { disabled }],
+    ...(state.status?.ai ? ["-",
+      folder ? ["✦ Ask about this folder…", () => askNotes("", state.byId.get(folder))] : ["✦ Ask your notes…", () => askNotes("")],
+      ["✦ Suggest names and folders", () => tidy(folder)],
+    ] : []),
     "-",
     ["Sync now", () => $("sync").click(), { disabled: $("sync").disabled }],
   ];
@@ -1128,8 +1139,8 @@ async function aiRun(title, waiting, path, body) {
   if (!result.ok) { aiSheet(title, [para("ai-error", result.error || "That didn't work.")]); return null; }
   return result;
 }
-$("v-ai").onclick = async () => {
-  const item = viewed();
+$("v-ai").onclick = () => summarise(viewed());
+async function summarise(item) {
   const r = await aiRun(`Summary of “${item.name}”`, "Reading the pages… this can take a minute.", "/api/ai/summary", { id: item.id });
   if (!r) return;
   const text = [r.title, "", r.summary, ...(r.actions.length ? ["", "Actions", ...r.actions.map(a => `- ${a}`)] : [])].join("\n");
@@ -1145,9 +1156,9 @@ $("v-ai").onclick = async () => {
       await act("Sending the summary to the tablet…", () => api("/api/ai/summary-send", { id: item.id, title: r.title, summary: r.summary, actions: r.actions }), "Summary sent to the tablet");
     } }),
   ]);
-};
-async function improveText() {
-  const item = viewed();
+}
+async function improveText(item) {
+  if (!item?.id) item = viewed();  // also used as a click handler
   const r = await aiRun("Improve with AI", "Reading the handwriting… this takes a few seconds for each page.", "/api/ai/transcribe", { id: item.id });
   if (!r) return;
   $("ai-sheet").close();
@@ -1159,10 +1170,11 @@ async function improveText() {
   toast(r.left ? `Read ${r.done} pages; ${r.left} more to go. Press it again to continue.`
     : r.done ? `Read ${r.done} page${r.done === 1 ? "" : "s"} with AI` : "Every page was already read with AI.");
 }
-async function askNotes(question) {
-  if (!question) question = await ask({ title: "Ask your notes", text: "The answer comes from the recognised text of your notebooks.", value: "", ok: "Ask" });
+async function askNotes(question, within) {  // within: only this document or folder
+  const title = within ? `Ask about “${within.name}”` : "Ask your notes";
+  if (!question) question = await ask({ title, text: within ? `The answer comes from the recognised text of this ${within.folder ? "folder" : "document"}.` : "The answer comes from the recognised text of your notebooks.", value: "", ok: "Ask" });
   if (!question) return;
-  const r = await aiRun("Ask your notes", "Reading your notes…", "/api/ai/ask", { question });
+  const r = await aiRun(title, "Reading your notes…", "/api/ai/ask", { question, within: within?.id || "" });
   if (!r) return;
   aiSheet(question, [
     para("ai-out", r.answer),
@@ -1173,9 +1185,10 @@ async function askNotes(question) {
   ]);
 }
 $("ai-ask").onclick = () => askNotes("");
-$("ai-tidy").onclick = async () => {
+$("ai-tidy").onclick = () => tidy(currentFolder());
+async function tidy(folder) {
   const title = "Suggest names and folders";
-  const r = await aiRun(title, "Looking through this folder…", "/api/ai/tidy", { folder: currentFolder() });
+  const r = await aiRun(title, "Looking through this folder…", "/api/ai/tidy", { folder });
   if (!r) return;
   if (!r.suggestions.length) return aiSheet(title, [para("", "Nothing to suggest: what is here is already well named and filed."), r.note ? para("ai-note", r.note) : null]);
   const rows = r.suggestions.map(suggestion => {
@@ -1191,7 +1204,7 @@ $("ai-tidy").onclick = async () => {
       await act("Renaming and moving on the tablet…", () => api("/api/ai/tidy-apply", { changes }), "Tidied up");
     } }),
   ]);
-};
+}
 $("v-history").onclick = showHistory;
 $("v-text").onclick = () => {
   if (state.version) { state.version = ""; $("v-body").classList.remove("with-history"); state.textMode = true; return showDoc(viewed()); }

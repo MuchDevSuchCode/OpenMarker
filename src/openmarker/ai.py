@@ -313,8 +313,20 @@ def _relevant(pages: list[dict], question: str, budget: int) -> list[dict]:
     return kept
 
 
-def ask_notes(question: str, items: dict[str, library.Item], budget: int = TEXT_BUDGET) -> dict:
-    """Answer from the recognised text of every page in the library.
+def _within(item: library.Item, items: dict[str, library.Item], place: str) -> bool:
+    """Whether the item is `place` itself or somewhere inside that folder."""
+    seen = set()
+    while item is not None and item.id not in seen:
+        if item.id == place:
+            return True
+        seen.add(item.id)
+        item = items.get(item.parent)
+    return False
+
+
+def ask_notes(question: str, items: dict[str, library.Item], budget: int = TEXT_BUDGET, within: str = "") -> dict:
+    """Answer from the recognised text of every page in the library, or only
+    of the document or folder whose id is `within`.
 
     Returns {"answer", "sources": [{"doc", "page", "name", "number"}], "note"}.
     """
@@ -324,14 +336,15 @@ def ask_notes(question: str, items: dict[str, library.Item], budget: int = TEXT_
     pages = []
     for doc, page, text in ocr.all_text():
         item = items.get(doc)
-        if item and not item.is_folder and not _trashed(item, items) and page in item.page_ids:
+        if item and not item.is_folder and not _trashed(item, items) and page in item.page_ids and (not within or _within(item, items, within)):
             pages.append({"doc": doc, "page": page, "name": item.name, "number": item.page_ids.index(page) + 1, "text": text})
     if not pages:
-        raise AIError("There is no recognised text to search yet. Sync, or use “Improve with AI” on a document.")
+        raise AIError("There is no recognised text here yet. Open it and use “Convert to text”, or “Read the handwriting with AI”."
+                      if within else "There is no recognised text to search yet. Sync, or use “Improve with AI” on a document.")
     note = ""
     if sum(len(p["text"]) for p in pages) > budget:
         kept = _relevant(pages, question, budget)
-        note = f"Your library is large, so this read the {len(kept)} pages closest to the question, of {len(pages)}."
+        note = f"{'There is a lot here' if within else 'Your library is large'}, so this read the {len(kept)} pages closest to the question, of {len(pages)}."
         pages = kept
     listing = "\n\n".join(f"[{n}] {p['name']}, page {p['number']}\n{p['text']}" for n, p in enumerate(pages, 1))
     reply = ask(ASK, f"My notes:\n\n{listing}\n\nMy question: {question}", ASK_SCHEMA)

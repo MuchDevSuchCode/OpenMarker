@@ -204,6 +204,23 @@ class AITests(unittest.TestCase):
         self.assertIn("order cedar boards", sent)
         self.assertNotIn("secret", sent)  # trashed documents are left out
 
+    def test_a_question_can_be_kept_to_one_folder_or_document(self):
+        self.switch_on()
+        garden = self.folder("Garden")
+        shed, shed_page = self.notebook("Shed", parent=garden)
+        cake, cake_page = self.notebook("Cake")
+        ocr.store_text(shed, shed_page, "h", "order cedar boards")
+        ocr.store_text(cake, cake_page, "h", "lemons and sugar")
+        client = FakeClient({"answer": "Cedar.", "sources": [1]})
+        with patch.object(ai, "_client", return_value=client):
+            ai.ask_notes("what do I need?", self.items(), within=garden)
+            ai.ask_notes("what do I need?", self.items(), within=cake)
+        in_folder, in_document = (request["messages"][0]["content"] for request in client.requests)
+        self.assertIn("cedar", in_folder)
+        self.assertNotIn("lemons", in_folder)
+        self.assertIn("lemons", in_document)
+        self.assertNotIn("cedar", in_document)
+
     def test_a_large_library_sends_the_closest_pages_and_says_so(self):
         self.switch_on()
         near, near_page = self.notebook("Shed")
