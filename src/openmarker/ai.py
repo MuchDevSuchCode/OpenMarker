@@ -29,7 +29,13 @@ DEFAULT_MODEL = "claude-opus-5-5"
 # Models that can hand a declined request to another model within the same call.
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-sonnet-5-5", "claude-fable-5-2"}
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
-MAX_PAGES = 20  # page pictures sent in one request, and pages transcribed in one go
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
+# Inference settings: name in config.json -> (default, lowest, highest).
+NUMBERS = {
+    "ai_max_tokens": (16000, 1000, 64000),  # longest reply the model may write
+    "ai_pages": (20, 1, 100),  # page pictures sent in one request, and pages transcribed in one go
+    "ai_picture_width": (1240, 600, 2400),  # width in pixels of the page pictures sent
+}
 TEXT_BUDGET = 300_000  # characters of notes sent with one question
 TIDY_LIMIT = 60  # documents looked at in one tidy-up
 EXCERPT = 700  # characters of each document shown to the model when tidying
@@ -81,6 +87,24 @@ def model() -> str:
     return chosen if chosen in MODELS else DEFAULT_MODEL
 
 
+def number(name: str) -> int:
+    """One of the NUMBERS settings, kept within its range."""
+    default, low, high = NUMBERS[name]
+    value = workflow.load_config().get(name)
+    return min(high, max(low, value)) if type(value) is int else default
+
+
+def effort() -> str:
+    """How hard the model should think, or "" to leave that to the model's own default."""
+    chosen = workflow.load_config().get("ai_effort")
+    return chosen if chosen in EFFORTS else ""
+
+
+def fallback() -> bool:
+    """Whether a request the model declines may be passed to another model."""
+    return workflow.load_config().get("ai_fallback", True) is not False
+
+
 def enabled() -> bool:
     return bool(workflow.load_config().get("ai_enabled")) and bool(key_source())
 
@@ -114,14 +138,19 @@ def ask(system: str, content: list | str, schema: dict | None = None) -> str | d
     chosen = model()
     request: dict = {
         "model": chosen,
-        "max_tokens": 16000,
+        "max_tokens": number("ai_max_tokens"),
         "system": system,
         "messages": [{"role": "user", "content": content}],
     }
+    output = {}
+    if effort():
+        output["effort"] = effort()
     if schema is not None:
-        request["output_config"] = {"format": {"type": "json_schema", "schema": schema}}
+        output["format"] = {"type": "json_schema", "schema": schema}
+    if output:
+        request["output_config"] = output
     betas = []
-    if chosen in FALLBACK_MODELS:
+    if chosen in FALLBACK_MODELS and fallback():
         # If the model declines a request, let the service pass it to another model.
         betas.append(FALLBACK_BETA)
         request["fallbacks"] = "default"
@@ -160,16 +189,16 @@ def page_png(item: library.Item, page_id: str) -> bytes:
     """A page as the model sees it: the ink, over the original page for PDFs."""
     rm = item.page_file(page_id)
     page = scene.load(rm) if rm.exists() else scene.Page()
-    number = item.source_pages.get(page_id)
+    source = item.source_pages.get(page_id)
     pdf = item.store / f"{item.id}.pdf"
     backdrop = None
-    if number is not None and pdf.exists():
+    if source is not None and pdf.exists():
         mtime = pdf.stat().st_mtime
-        width, height = render.pdf_page_size(str(pdf), mtime, number)
+        width, height = render.pdf_page_size(str(pdf), mtime, source)
         scale, x0 = export.source_fit(width, height, page.paper[1])
         page = scene.Page(page.strokes, page.text, -x0 / scale, 0.0, (width - x0) / scale, height / scale)
-        backdrop = render.pdf_page_png(str(pdf), mtime, number)
-    return render.png(page, backdrop)
+        backdrop = render.pdf_page_png(str(pdf), mtime, source)
+    return render.png(page, backdrop, number("ai_picture_width"))
 
 
 def _picture(png: bytes) -> dict:
@@ -198,7 +227,7 @@ TRANSCRIBE_OVER_PRINT = (
 def transcribe(item: library.Item) -> dict:
     """Read the handwriting on a document's pages and keep it for search and text view.
 
-    Works through up to MAX_PAGES pages that have not been read this way yet.
+    Works through as many pages as the "pages at a time" setting allows that have not been read this way yet.
     Returns {"pages": text for every page, "done": pages read now, "left": pages still to do}.
     """
     todo = []
@@ -206,7 +235,7 @@ def transcribe(item: library.Item) -> dict:
         digest = _file_hash(item.page_file(page_id))
         if ocr.text_source(item.id, page_id, digest) != "ai":
             todo.append((page_id, digest))
-    batch = todo[:MAX_PAGES]
+    batch = todo[:number("ai_pages")]
     for page_id, digest in batch:
         system = TRANSCRIBE + (TRANSCRIBE_OVER_PRINT if page_id in item.source_pages else "")
         text = ask(system, [_picture(page_png(item, page_id)), {"type": "text", "text": "Transcribe this page."}])
@@ -237,7 +266,7 @@ def summarise(item: library.Item) -> dict:
     if not item.page_ids:
         raise AIError("This document has no pages to read yet.")
     note = ""
-    if len(item.page_ids) <= MAX_PAGES:
+    if len(item.page_ids) <= number("ai_pages"):
         content: list = [_picture(page_png(item, page_id)) for page_id in item.page_ids]
         content.append({"type": "text", "text": f"These are the pages of “{item.name}”, in order."})
     else:

@@ -117,6 +117,8 @@
   .pick b { display: block; font-weight: 600; }
   .pick small { display: block; color: var(--muted); font-size: 12.5px; }
   .ai-row { grid-column: 1 / -1; }
+  .set-foot { margin: 4px 0 12px; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+  .set-foot code { background: color-mix(in srgb, var(--ink) 8%, transparent); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
   .set-link { border: 0; background: none; padding: 0; min-height: 0; margin-top: 6px; color: var(--muted); font-size: 12.5px; text-decoration: underline; }
   .set-row .stack-v { display: block; }
 
@@ -391,6 +393,16 @@
           <input id="set-md-tag" placeholder="e.g. export" autocomplete="off" spellcheck="false" maxlength="100"></label>
       </section>
       <section class="set-group">
+        <h4>Where things go on the tablet</h4>
+        <label class="set-row"><span><b>Agenda pages</b><small>The folder for “Today's agenda page”. Leave empty for the top level.</small></span>
+          <input id="set-dest-agenda" placeholder="Top level" autocomplete="off" spellcheck="false" maxlength="300"></label>
+        <label class="set-row"><span><b>AI summaries</b><small>Leave empty to put each summary beside its document.</small></span>
+          <input id="set-dest-summary" placeholder="Beside the document" autocomplete="off" spellcheck="false" maxlength="300"></label>
+        <label class="set-row"><span><b>AI answers</b><small>Leave empty to put each answer beside the page that asked.</small></span>
+          <input id="set-dest-answer" placeholder="Beside the document" autocomplete="off" spellcheck="false" maxlength="300"></label>
+        <p class="set-foot">Write a folder as it is named on the tablet; use / for a folder inside another, such as <code>Notes/Answers</code>. A folder that does not exist yet is made the first time something is sent to it, which restarts the tablet's app once. Files, pictures and web pages you send go to the folder you are looking at.</p>
+      </section>
+      <section class="set-group">
         <h4>AI (optional)</h4>
         <label class="set-row inline"><span><b>AI features</b><small>Summaries, better handwriting to text, questions about your notes, and tidy-up suggestions. What you use a feature on is sent to Anthropic's Claude API and billed to your key. Nothing is sent until you use one.</small></span>
           <input type="checkbox" class="switch" id="set-ai" role="switch"></label>
@@ -399,6 +411,16 @@
             <button type="button" class="set-link" id="set-ai-clear" hidden>Remove the saved key</button></span></label>
         <label class="set-row"><span><b>Model</b><small>More capable models read handwriting better and cost more.</small></span>
           <select id="set-ai-model"></select></label>
+        <label class="set-row"><span><b>Effort</b><small>How hard the model thinks before it replies. More effort is slower and costs more.</small></span>
+          <select id="set-ai-effort"></select></label>
+        <label class="set-row"><span><b>Longest reply</b><small>The most the model may write in one reply, in tokens (a token is about three quarters of a word). <span id="lim-ai_max_tokens"></span></small></span>
+          <input type="number" id="set-ai-max-tokens" step="1000" inputmode="numeric"></label>
+        <label class="set-row"><span><b>Pages at a time</b><small>How many page pictures go in one request. Longer documents are read in batches, or summarised from their recognised text. <span id="lim-ai_pages"></span></small></span>
+          <input type="number" id="set-ai-pages" step="1" inputmode="numeric"></label>
+        <label class="set-row"><span><b>Page picture width</b><small>Width in pixels of the page pictures sent. Larger is easier to read for small writing and costs more. <span id="lim-ai_picture_width"></span></small></span>
+          <input type="number" id="set-ai-width" step="20" inputmode="numeric"></label>
+        <label class="set-row inline"><span><b>Use another model if one declines</b><small>If the chosen model declines a request, let the service pass it to another Claude model instead of failing.</small></span>
+          <input type="checkbox" class="switch" id="set-ai-fallback" role="switch"></label>
         <label class="set-row"><span><b>Answer tagged pages</b><small>Write a question on a page, give the page this tag on the tablet, and sync: the answer comes back as a document beside it. Leave empty to turn this off.</small></span>
           <input id="set-ai-tag" placeholder="e.g. ask" autocomplete="off" spellcheck="false" maxlength="100"></label>
       </section>
@@ -802,6 +824,18 @@ $("open-settings").onclick = async () => {
   $("set-ai-model").replaceChildren(...c.ai_models.map(id => el("option", { value: id, textContent: MODEL_NAMES[id] || id })));
   $("set-ai-model").value = c.ai_model;
   $("set-ai-tag").value = c.ai_answer_tag;
+  $("set-ai-effort").replaceChildren(el("option", { value: "", textContent: "The model's own default" }),
+    ...c.ai_efforts.map(level => el("option", { value: level, textContent: EFFORT_NAMES[level] || level })));
+  $("set-ai-effort").value = c.ai_effort;
+  $("set-ai-fallback").checked = c.ai_fallback;
+  for (const [name, id] of Object.entries(NUMBER_FIELDS)) {
+    const [, low, high] = c.ai_limits[name];
+    Object.assign($(id), { value: c[name], min: low, max: high });
+    $(`lim-${name}`).textContent = `${low.toLocaleString()} to ${high.toLocaleString()}.`;
+  }
+  $("set-dest-agenda").value = c.agenda_folder;
+  $("set-dest-summary").value = c.ai_summary_folder;
+  $("set-dest-answer").value = c.ai_answer_folder;
   settings.key = c.ai_key; settings.clearKey = false;
   $("set-folder").textContent = c.folder;
   $("set-ocr").textContent = c.handwriting_search ? "Available" : "Needs Windows";
@@ -813,6 +847,8 @@ $("open-settings").onclick = async () => {
   $("settings").showModal();
 };
 const settings = { key: "", clearKey: false };
+const EFFORT_NAMES = { low: "Low (fastest, costs least)", medium: "Medium", high: "High", xhigh: "Extra high", max: "Maximum (slowest, costs most)" };
+const NUMBER_FIELDS = { ai_max_tokens: "set-ai-max-tokens", ai_pages: "set-ai-pages", ai_picture_width: "set-ai-width" };
 const MODEL_NAMES = {
   "claude-opus-5-5": "Claude Opus 5.5 (recommended)", "claude-sonnet-5-5": "Claude Sonnet 5.5 (costs less)",
   "claude-haiku-5-5": "Claude Haiku 5.5 (costs least)", "claude-fable-5-2": "Claude Fable 5.2 (most capable, costs most)",
@@ -834,6 +870,9 @@ $("settings-form").onsubmit = async event => {
     wifi_host: $("set-wifi").value, tablet_name: $("set-name").value, auto_sync: $("set-auto").checked,
     calendar: $("set-calendar").value, markdown_dir: $("set-md-dir").value, markdown_tag: $("set-md-tag").value,
     ai_enabled: $("set-ai").checked, ai_model: $("set-ai-model").value, ai_answer_tag: $("set-ai-tag").value,
+    ai_effort: $("set-ai-effort").value, ai_fallback: $("set-ai-fallback").checked,
+    ...Object.fromEntries(Object.entries(NUMBER_FIELDS).map(([name, id]) => [name, Number($(id).value)])),
+    agenda_folder: $("set-dest-agenda").value, ai_summary_folder: $("set-dest-summary").value, ai_answer_folder: $("set-dest-answer").value,
     ...(key ? { ai_key: key } : settings.clearKey ? { ai_key_clear: true } : {}),
   }).catch(error => ({ ok: false, error: error.message }));
   $("set-save").disabled = false;

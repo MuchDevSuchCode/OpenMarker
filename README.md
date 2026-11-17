@@ -119,7 +119,18 @@ pages you tagged on the tablet. It runs when you sync from the browser (or
 automatic sync does), not from `launch pull`. Leave its tag empty to keep it
 off.
 
-The model is `claude-opus-5-5` unless you choose another in Settings. The key
+Settings › AI also holds the inference options: the model (`claude-opus-5-5`
+unless you choose another), how much effort it spends, the longest reply it
+may write, how many page pictures go in one request and how large they are,
+and whether a request the model declines may pass to another Claude model.
+
+Summaries and answers are put beside the document they belong to. To collect
+them in a folder instead, name it under **Settings › Where things go on the
+tablet**; the agenda page's folder is set there too. A folder that does not
+exist yet is made the first time something is sent to it, which restarts the
+tablet's app once.
+
+The key
 is kept in `anthropic_key` in the data folder and is never sent back to the
 browser; if `ANTHROPIC_API_KEY` is set in the environment, that is used when
 no key is saved.
@@ -179,6 +190,14 @@ in the file. Settings in `config.json`:
 | `ai_enabled` | Switch the AI features on. Off by default. |
 | `ai_model` | The Claude model to use. |
 | `ai_answer_tag` | Answer pages carrying this tag after a sync. Empty: off. |
+| `ai_effort` | `low`, `medium`, `high`, `xhigh` or `max`. Unset: the model's own default. |
+| `ai_max_tokens` | The longest reply the model may write, in tokens (default 16000). |
+| `ai_pages` | Page pictures sent in one request (default 20). |
+| `ai_picture_width` | Width in pixels of the page pictures sent (default 1240). |
+| `ai_fallback` | Let a request the model declines pass to another Claude model (default on). |
+| `agenda_folder` | Folder on the tablet for agenda pages (default `Agenda`; empty for the top level). |
+| `ai_summary_folder` | Folder on the tablet for AI summaries. Unset: beside the document. |
+| `ai_answer_folder` | Folder on the tablet for AI answers. Unset: beside the page that asked. |
 | `hooks` | Commands to run for every changed document, e.g. `[{"run": "python my_script.py"}]`. Each receives `OPENMARKER_DOC_ID`, `OPENMARKER_NAME`, `OPENMARKER_PATH`, `OPENMARKER_TAGS` and `OPENMARKER_MIRROR`. |
 
 ## How it works

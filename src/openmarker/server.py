@@ -119,6 +119,14 @@ def settings_json() -> dict:
         "ai_model": ai.model(),
         "ai_models": list(ai.MODELS),
         "ai_answer_tag": config.get("ai_answer_tag") or "",
+        "ai_effort": ai.effort(),
+        "ai_efforts": list(ai.EFFORTS),
+        "ai_fallback": ai.fallback(),
+        **{name: ai.number(name) for name in ai.NUMBERS},
+        "ai_limits": {name: list(limits) for name, limits in ai.NUMBERS.items()},
+        "agenda_folder": config.get("agenda_folder", DEFAULT_AGENDA_FOLDER),
+        "ai_summary_folder": config.get("ai_summary_folder") or "",
+        "ai_answer_folder": config.get("ai_answer_folder") or "",
         "folder": str(workflow.config_path().parent),
         "handwriting_search": ocr.available(),
         "subject_cutout": images.subject_available(),
@@ -171,7 +179,47 @@ def settings_changes(body: dict) -> dict:
         changes["ai_model"] = body["ai_model"]
     if "ai_answer_tag" in body:
         changes["ai_answer_tag"] = _setting(body, "ai_answer_tag", "Tag", 100) or None
+    if "ai_effort" in body:
+        if body["ai_effort"] not in ("",) + ai.EFFORTS:
+            raise UserError("Choose one of the listed effort levels.")
+        changes["ai_effort"] = body["ai_effort"] or None
+    if "ai_fallback" in body:
+        if not isinstance(body["ai_fallback"], bool):
+            raise UserError("The fallback setting must be true or false.")
+        changes["ai_fallback"] = body["ai_fallback"]
+    for name, (_, low, high) in ai.NUMBERS.items():
+        if name in body:
+            if type(body[name]) is not int or not low <= body[name] <= high:
+                raise UserError(f"{NUMBER_LABELS[name]} must be a whole number from {low:,} to {high:,}.")
+            changes[name] = body[name]
+    for name, label in FOLDER_LABELS.items():
+        if name in body:
+            path = "/".join(part.strip() for part in _setting(body, name, label, 300).replace(chr(92), "/").split("/") if part.strip())
+            # The agenda has a folder unless it is emptied on purpose; the others default to "beside the document".
+            changes[name] = path if name == "agenda_folder" else path or None
     return changes
+
+
+DEFAULT_AGENDA_FOLDER = "Agenda"
+NUMBER_LABELS = {"ai_max_tokens": "Longest reply", "ai_pages": "Pages at a time", "ai_picture_width": "Page picture width"}
+FOLDER_LABELS = {"agenda_folder": "Agenda folder", "ai_summary_folder": "Summaries folder", "ai_answer_folder": "Answers folder"}
+
+
+def destination(host: str, setting: str, otherwise: str = "") -> str:
+    """The folder on the tablet that a setting names, as an id; `otherwise` if the setting is empty.
+
+    A folder that does not exist yet is made, and the tablet's app restarted
+    once so that it knows the folder before anything is sent into it.
+    """
+    default = DEFAULT_AGENDA_FOLDER if setting == "agenda_folder" else ""
+    path = workflow.load_config().get(setting, default)
+    if not isinstance(path, str) or not path.strip():
+        return otherwise
+    folder, created = tablet.ensure_folder(host, path)
+    if created:
+        tablet.restart_app(host)
+        time.sleep(6)
+    return folder
 
 
 def api_key_change(body: dict) -> str | None | bool:
@@ -306,13 +354,15 @@ def _answer_tagged(host: str) -> dict:
     if not tag:
         return {}
     items = library.load(tablet.default_mirror())
-    sent, error, restart = 0, "", False
+    sent, error, restart, folder = 0, "", False, None
     for item, page_id, digest in ai.pending_answers(items, tag):
         number = item.page_ids.index(page_id) + 1
         try:
             reply = ai.answer_page(item, page_id)
             pdf = generate.text_pdf("Answer", reply, kicker=f"{item.name} · page {number}")
-            parent = item.parent if item.parent in items else ""
+            if folder is None:  # "" when answers go beside the page that asked
+                folder = destination(host, "ai_answer_folder")
+            parent = folder or (item.parent if item.parent in items else "")
             restart = bool(tablet.upload(host, f"{item.name} – answer p{number}", pdf, "pdf", parent, restart=False)) or restart
         except ai.AIError as exc:
             error = str(exc)
@@ -360,7 +410,8 @@ def ai_action(action: str, body: dict) -> dict:
                 raise UserError("Those actions can't be sent.")
             pdf = generate.text_pdf(words("title", 200) or "Summary", words("summary", 20000),
                                     kicker=f"Summary · {item.name}", checklist=[a for a in actions if a.strip()])
-            tablet.upload(host, f"{item.name} – summary", pdf, "pdf", item.parent if item.parent in items else "")
+            beside = item.parent if item.parent in items else ""
+            tablet.upload(host, f"{item.name} – summary", pdf, "pdf", destination(host, "ai_summary_folder", beside))
         elif action == "ai/tidy-apply":
             host = require_tablet()
             changes = body.get("changes")
@@ -499,8 +550,7 @@ def change(action: str, body: dict, raw: bytes = b"", query: dict | None = None)
             today = date.today()
             source = workflow.load_config().get("calendar")
             events = generate.calendar_events(source, today) if source else None
-            folder = tablet.find_folder(host, "Agenda") or tablet.new_folder(host, "Agenda", restart=False)
-            tablet.upload(host, f"Agenda {today.isoformat()}", generate.agenda_pdf(today, events), "pdf", folder)
+            tablet.upload(host, f"Agenda {today.isoformat()}", generate.agenda_pdf(today, events), "pdf", destination(host, "agenda_folder"))
         elif action == "folder":
             tablet.new_folder(host, _text(body, "name"), _id(body, "parent", ("",)))
         elif action == "rename":

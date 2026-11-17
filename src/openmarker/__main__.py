@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from datetime import date
 from pathlib import Path
 
@@ -151,7 +152,11 @@ def cmd_agenda(args: argparse.Namespace) -> None:
     today = date.today()
     source = args.calendar or workflow.load_config().get("calendar")
     events = generate.calendar_events(source, today) if source else None
-    folder = tablet.find_folder(host, "Agenda") or tablet.new_folder(host, "Agenda", restart=False)
+    path = workflow.load_config().get("agenda_folder", "Agenda")
+    folder, created = tablet.ensure_folder(host, path) if path else ("", False)
+    if created:
+        tablet.restart_app(host)  # the tablet's app only learns of a new folder when it restarts
+        time.sleep(6)
     tablet.upload(host, f"Agenda {today.isoformat()}", generate.agenda_pdf(today, events), "pdf", folder)
     print(f"sent agenda for {today.isoformat()}" + (f" with {len(events)} event(s)" if events is not None else ""))
 

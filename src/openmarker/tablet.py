@@ -360,6 +360,24 @@ def find_folder(host: str, name: str, parent: str = "") -> str | None:
     return None
 
 
+def ensure_folder(host: str, path: str) -> tuple[str, bool]:
+    """Id of the folder at `path` (such as "Notes/Answers"), making whatever part of it is missing.
+
+    Also returns whether anything was made: the tablet's app only learns of a
+    new folder when it is restarted, which is left to the caller.
+    """
+    parent, created = "", False
+    for name in (part.strip() for part in path.split("/")):
+        if not name:
+            continue
+        found = None if created else find_folder(host, name, parent)
+        if found is None:
+            found = new_folder(host, name, parent, restart=False)
+            created = True
+        parent = found
+    return parent, created
+
+
 def edit_metadata(host: str, doc: str, restart: bool = True, **changes) -> None:
     """Change fields of a document's or folder's metadata (name, parent)."""
     _check_id(doc)

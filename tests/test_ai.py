@@ -124,6 +124,49 @@ class AITests(unittest.TestCase):
         self.assertNotIn("fallbacks", client.requests[1])
         self.assertNotIn("output_config", client.requests[1])
 
+    def test_inference_settings_shape_the_request(self):
+        self.switch_on(ai_effort="high", ai_max_tokens=4000, ai_fallback=False, ai_picture_width=800, ai_pages=1)
+        doc, _ = self.notebook("Notes")
+        client = FakeClient({"title": "t", "summary": "s", "actions": []})
+        with patch.object(ai, "_client", return_value=client):
+            ai.summarise(self.items()[doc])
+        request = client.requests[0]
+        self.assertEqual(request["max_tokens"], 4000)
+        self.assertEqual(request["output_config"]["effort"], "high")
+        self.assertIn("format", request["output_config"])
+        self.assertNotIn("fallbacks", request)
+        self.assertEqual(request["betas"], [])
+        picture = request["messages"][0]["content"][0]["source"]["data"]
+        from PIL import Image
+        import base64, io
+        self.assertEqual(Image.open(io.BytesIO(base64.b64decode(picture))).width, 800)
+
+    def test_inference_settings_fall_back_to_defaults_and_stay_in_range(self):
+        workflow.update_config(ai_max_tokens=10**9, ai_pages="many", ai_effort="heroic")
+        self.assertEqual((ai.number("ai_max_tokens"), ai.number("ai_pages"), ai.effort(), ai.fallback()), (64000, 20, "", True))
+        self.assertEqual(server.settings_changes({"ai_effort": "", "ai_fallback": False, "ai_pages": 5, "ai_max_tokens": 8000}),
+                         {"ai_effort": None, "ai_fallback": False, "ai_pages": 5, "ai_max_tokens": 8000})
+        for body in ({"ai_effort": "heroic"}, {"ai_pages": 0}, {"ai_max_tokens": "8000"}, {"ai_picture_width": 99999}, {"ai_fallback": 1}):
+            with self.assertRaises(server.UserError, msg=body):
+                server.settings_changes(body)
+
+    def test_destination_folders(self):
+        self.assertEqual(server.settings_changes({"agenda_folder": "", "ai_summary_folder": " Notes \\ Summaries/ ", "ai_answer_folder": ""}),
+                         {"agenda_folder": "", "ai_summary_folder": "Notes/Summaries", "ai_answer_folder": None})
+        self.assertEqual(server.settings_json()["agenda_folder"], "Agenda")  # until it is changed
+        made = []
+        existing = {("Notes", ""): "notes-id"}
+        with patch.object(server.tablet, "find_folder", side_effect=lambda host, name, parent="": existing.get((name, parent))), \
+             patch.object(server.tablet, "new_folder", side_effect=lambda host, name, parent="", restart=True: made.append((name, parent)) or f"{name}-id"), \
+             patch.object(server.tablet, "restart_app") as restart, patch.object(server.time, "sleep"):
+            self.assertEqual(server.tablet.ensure_folder("host", "Notes"), ("notes-id", False))
+            self.assertEqual(server.destination("host", "ai_summary_folder", "beside"), "beside")  # not set
+            restart.assert_not_called()
+            workflow.update_config(ai_summary_folder="Notes/Summaries/2026")
+            self.assertEqual(server.destination("host", "ai_summary_folder", "beside"), "2026-id")
+            self.assertEqual(made, [("Summaries", "notes-id"), ("2026", "Summaries-id")])
+            restart.assert_called_once()  # a new folder needs one restart before anything is sent into it
+
     def test_a_declined_or_cut_off_reply_is_reported_not_used(self):
         self.switch_on()
         for reason in ("refusal", "max_tokens"):

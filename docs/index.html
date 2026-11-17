@@ -541,7 +541,8 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
             <li><b>Sync:</b> sync automatically in the background.</li>
             <li><b>Agenda page:</b> the calendar to read events from.</li>
             <li><b>Markdown export:</b> the folder to write notes into, and an optional tag.</li>
-            <li><b>AI:</b> off unless you switch it on and add a key.</li>
+            <li><b>Where things go on the tablet:</b> folders for agenda pages, AI summaries and AI answers.</li>
+            <li><b>AI:</b> off unless you switch it on and add a key; then the model, effort and other inference options.</li>
           </ul>
         </div>
         <figure class="shot">
@@ -600,6 +601,14 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
             <tr><td><code>ai_enabled</code></td><td>Switch the AI features on. Off by default.</td></tr>
             <tr><td><code>ai_model</code></td><td>The Claude model to use; <code>claude-opus-5-5</code> unless changed.</td></tr>
             <tr><td><code>ai_answer_tag</code></td><td>Answer pages carrying this tag after a sync. Empty: off.</td></tr>
+            <tr><td><code>ai_effort</code></td><td><code>low</code>, <code>medium</code>, <code>high</code>, <code>xhigh</code> or <code>max</code>. Unset: the model's own default.</td></tr>
+            <tr><td><code>ai_max_tokens</code></td><td>The longest reply the model may write, in tokens (default 16000).</td></tr>
+            <tr><td><code>ai_pages</code></td><td>Page pictures sent in one request (default 20).</td></tr>
+            <tr><td><code>ai_picture_width</code></td><td>Width in pixels of the page pictures sent (default 1240).</td></tr>
+            <tr><td><code>ai_fallback</code></td><td>Let a request the model declines pass to another Claude model (default on).</td></tr>
+            <tr><td><code>agenda_folder</code></td><td>Folder on the tablet for agenda pages (default <code>Agenda</code>; empty for the top level).</td></tr>
+            <tr><td><code>ai_summary_folder</code></td><td>Folder on the tablet for AI summaries. Unset: beside the document.</td></tr>
+            <tr><td><code>ai_answer_folder</code></td><td>Folder on the tablet for AI answers. Unset: beside the page that asked.</td></tr>
             <tr><td><code>hooks</code></td><td>Commands to run for every changed document. Each receives <code>OPENMARKER_DOC_ID</code>, <code>OPENMARKER_NAME</code>, <code>OPENMARKER_PATH</code>, <code>OPENMARKER_TAGS</code> and <code>OPENMARKER_MIRROR</code>.</td></tr>
           </tbody>
         </table>
