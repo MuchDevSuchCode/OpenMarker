@@ -15,6 +15,8 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
     "scikit-image>=0.22",
+    # Cutting the subject out of photos with a local segmentation model.
+    "rembg[cpu]>=2.0",
     # Handwriting recognition uses the recogniser built into Windows.
     "winrt-runtime; sys_platform == 'win32'",
     "winrt-Windows.Foundation; sys_platform == 'win32'",
@@ -23,8 +25,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Cutting the subject out of photos with a local segmentation model.
-ai = ["rembg[cpu]>=2.0"]
 dev = ["pytest>=8"]
 
 [project.urls]

@@ -5,7 +5,7 @@ shows transparency as black. So the background is turned white first:
 
     subject a segmentation model finds the main subject and removes everything
             else, however busy the background (people, objects, pets). Runs
-            on this machine; needs the optional `rembg` package and downloads
+            on this machine; uses the `rembg` package and downloads
             its model (about 180 MB) the first time.
     cutout  a plain backdrop is removed, keeping the subject (logos, product
             shots, drawings on a flat colour). Works from the picture's edges

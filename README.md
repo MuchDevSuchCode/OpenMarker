@@ -31,7 +31,7 @@ or supported by the tablet's manufacturer.
 - **Send to tablet.** PDFs, EPUBs, web pages, a daily agenda page from a
   calendar, and pictures, without restarting the tablet's app.
 - **Picture import.** Remove a plain backdrop, flatten a photo of paper, or
-  cut out the subject with a local AI model (optional install).
+  cut out the subject with a local AI model.
 - **Trace a drawing into real pen strokes.** Turns a line drawing into a
   native notebook page made of fineliner strokes that you can erase, select
   and draw over on the tablet.
@@ -76,8 +76,8 @@ or supported by the tablet's manufacturer.
 
 3. Press **Sync now** in the browser.
 
-To add the AI subject cut-out for photos (a download of a few hundred MB),
-run `launch --with-ai` once.
+The AI subject cut-out for photos is included. The first time you use it, it
+downloads its model (about 180 MB).
 
 ### Wi-Fi
 
@@ -182,7 +182,7 @@ launch.cmd, launch.sh
 ## Development
 
 ```
-pip install -e .[dev,ai]
+pip install -e .[dev]
 pytest
 ```
 
