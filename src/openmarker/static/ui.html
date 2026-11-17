@@ -685,6 +685,7 @@ function itemMenu(item) {
   ] : [];
   return [
     open,
+    !item.folder && ["Convert to text", () => { location.hash = `doc/${item.id}/text`; }],
     item.folder
       ? ["New folder inside…", () => newFolder(item.id), { disabled }]
       : [item.type === "epub" ? "Download EPUB" : "Export PDF", () => download(item)],
