@@ -49,11 +49,40 @@ or supported by the tablet's manufacturer.
   questions you write on the tablet. See [AI features](#ai-features-optional).
 - **Hooks.** Run your own command for every document that changes.
 
+## Install
+
+Download the installer for your computer from the
+[latest release](https://github.com/MuchDevSuchCode/OpenMarker/releases/latest).
+Nothing else is needed: Python and every library are inside it.
+
+**Windows 10 or 11.** Run `OpenMarker-…-windows-setup.exe`. It installs for
+your account only, so it does not ask for administrator rights, and it can add
+a desktop shortcut and start OpenMarker when you sign in. Windows may say it
+"protected your PC" because the installer is not signed; choose **More info**,
+then **Run anyway**. To remove OpenMarker, use *Settings › Apps*; the
+uninstaller asks whether to delete your data as well.
+
+**macOS 12 or later, Apple silicon.** Open `OpenMarker-…-macos-apple-silicon.dmg`
+and drag OpenMarker onto Applications. The app is not signed by Apple, so the
+first time you open it macOS refuses: open *System Settings › Privacy &
+Security*, scroll to the message about OpenMarker and choose **Open Anyway**.
+To remove it, quit it and drag it from Applications to the Bin. For an Intel
+Mac, or Linux, run it from source (below).
+
+Starting OpenMarker opens your library in the browser. The app keeps running
+in the background, with an icon in the Windows notification area or the macOS
+menu bar; **Quit** is on that icon and in **Settings**. Starting it again just
+opens the library. Updating is installing the newer version over the old one.
+
+Then follow [Getting started](#getting-started) from step 2.
+
 ## Requirements
 
-- Python 3.12 or newer.
-- An `ssh` client on the PATH (included with Windows 10 and later, macOS and
-  Linux).
+- **Developer mode** on the tablet (see below), and an `ssh` client on this
+  computer: it is part of macOS and Linux, and of Windows 10 and later (if it
+  is missing, add it under *Settings › System › Optional features › OpenSSH
+  Client*).
+- To run from source instead of the installer: Python 3.12 or newer.
 - **Developer mode** switched on in the tablet's settings. Enabling it resets
   the tablet, so let cloud sync finish first; your documents come back when
   you sign in again. The tablet then shows its SSH password under
@@ -63,7 +92,7 @@ or supported by the tablet's manufacturer.
 
 ## Getting started
 
-1. Get the code and start it:
+1. Install OpenMarker (above), or get the code and start it:
 
    ```
    git clone https://github.com/MuchDevSuchCode/OpenMarker.git
@@ -76,14 +105,10 @@ or supported by the tablet's manufacturer.
    straight away and opens <http://127.0.0.1:8737/> in your browser.
 
 2. Authorise this computer on the tablet, once. Plug the tablet in by USB,
-   wake it, and run:
-
-   ```
-   launch setup
-   ```
-
-   It asks for the tablet's SSH password one time and installs a key, so the
-   password is never needed again or stored anywhere.
+   wake it, choose **Set up tablet** in the sidebar and enter the tablet's
+   password. It is used one time to install a key, so the password is never
+   needed again or stored anywhere. (`launch setup` does the same in a
+   terminal.) If the tablet is later reset, do this again from **Settings**.
 
 3. Press **Sync now** in the browser.
 
@@ -178,6 +203,11 @@ command after `launch`:
 
 `launch <command> -h` lists the options of a command.
 
+With the installed app, the same commands are `openmarker-cli <command>` in
+the install folder on Windows (`%LOCALAPPDATA%\Programs\OpenMarker`), and
+`/Applications/OpenMarker.app/Contents/MacOS/OpenMarker <command>` on macOS.
+`selftest` checks that every part of the app works on this computer.
+
 ## Where your data lives
 
 Everything stays in the `openmarker` folder in your home directory:
@@ -192,6 +222,7 @@ Everything stays in the `openmarker` folder in your home directory:
 | `id_ed25519` | The SSH key that unlocks your tablet. Treat it like a password. |
 | `anthropic_key` | Your Anthropic API key, if you saved one for the AI features. Treat it like a password. |
 | `known_hosts` | Your tablet's identity, so nothing else is mistaken for it. |
+| `openmarker.log` | What the installed app would have printed in a terminal. Look here if it does not start. |
 
 Most settings can be changed in **Settings** in the sidebar; hooks are edited
 in the file. Settings in `config.json`:
@@ -253,6 +284,7 @@ src/openmarker/
     ai.py         the optional AI features
 tests/
 launch.cmd, launch.sh
+packaging/        builds the installers
 ```
 
 ## Development
@@ -261,6 +293,20 @@ launch.cmd, launch.sh
 pip install -e .[dev]
 pytest
 ```
+
+### Building the installers
+
+```
+pip install -e .[build]
+python packaging/build.py
+```
+
+builds the installer for the system it runs on into `dist/`: a setup program
+on Windows (needs [Inno Setup 6](https://jrsoftware.org/isdl.php)), a disk
+image on macOS. The packaged app is made to run its own `selftest` before it
+is wrapped. On GitHub, the *Installers* workflow does this for both systems;
+pushing a tag such as `v0.1.0` (matching `__version__` in
+`src/openmarker/__init__.py`) publishes them as a release.
 
 ## Known limits
 

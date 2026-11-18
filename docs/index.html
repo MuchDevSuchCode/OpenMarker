@@ -501,10 +501,10 @@
           <div class="table">
             <table>
               <tbody>
-                <tr><td><b>Python</b></td><td>3.12 or newer, on the PATH.</td></tr>
+                <tr><td><b>A computer</b></td><td>Windows 10 or 11, or a Mac with Apple silicon on macOS 12 or later, for the installer. Anything with Python 3.12 can run it from source.</td></tr>
                 <tr><td><b>An <code>ssh</code> client</b></td><td>Included with Windows 10 and later, macOS and Linux.</td></tr>
                 <tr><td><b>Developer mode</b></td><td>Switched on in the tablet's settings. See <a href="#device">Set up your tablet</a>.</td></tr>
-                <tr><td><b>Windows</b></td><td>Only for handwriting search and convert to text. Everything else is plain Python.</td></tr>
+                <tr><td><b>Windows</b></td><td>Only for handwriting search and convert to text. Everything else works on every system.</td></tr>
               </tbody>
             </table>
           </div>
@@ -515,16 +515,24 @@
         </div>
         <ol class="steps">
           <li>
-            <h3>Get the code and start it</h3>
-            <div class="code"><pre><code>git clone https://github.com/MuchDevSuchCode/OpenMarker.git
+            <h3>Install OpenMarker</h3>
+            <p>Download the installer from the <a href="https://github.com/MuchDevSuchCode/OpenMarker/releases/latest">latest release</a>. Python and every library are inside it.</p>
+            <ul>
+              <li><b>Windows:</b> run the setup program. It installs for your account only and never asks for administrator rights. The installer is not signed, so Windows may say it protected your PC: choose <b>More info</b>, then <b>Run anyway</b>.</li>
+              <li><b>Mac:</b> open the disk image and drag OpenMarker onto Applications. The app is not signed by Apple, so the first time, allow it under <b>System Settings › Privacy &amp; Security › Open Anyway</b>.</li>
+            </ul>
+            <p>Starting OpenMarker opens your library in the browser. It keeps running in the background, with an icon in the notification area or menu bar to open or quit it.</p>
+            <details style="margin:1em 0 0">
+              <summary>Or run it from source</summary>
+              <div><div class="code"><pre><code>git clone https://github.com/MuchDevSuchCode/OpenMarker.git
 cd OpenMarker
 launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></pre></div>
-            <p>The first run creates a private Python environment in <code>.venv</code> and installs OpenMarker into it, which takes a few minutes. After that it starts straight away and opens <code>http://127.0.0.1:8737/</code> in your browser.</p>
+              <p>Needs Python 3.12 or newer. The first run creates a private Python environment in <code>.venv</code> and installs OpenMarker into it, which takes a few minutes. After that it starts straight away and opens <code>http://127.0.0.1:8737/</code> in your browser.</p></div>
+            </details>
           </li>
           <li>
             <h3>Authorise this computer on the tablet</h3>
-            <div class="code"><pre><code>launch setup</code></pre></div>
-            <p>Once only, with the tablet plugged in by USB and awake. The details are in <a href="#device">Set up your tablet</a>.</p>
+            <p>Choose <b>Set up tablet</b> in the sidebar and enter the tablet's password. Once only, with the tablet plugged in by USB and awake. The details are in <a href="#device">Set up your tablet</a>.</p>
           </li>
           <li>
             <h3>Press Sync now</h3>
@@ -561,8 +569,7 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
         </li>
         <li>
           <h3>Authorise your computer</h3>
-          <p>Plug the tablet in by USB, wake it, and run:</p>
-          <div class="code"><pre><code>launch setup</code></pre></div>
+          <p>Plug the tablet in by USB, wake it, choose <b>Set up tablet</b> in OpenMarker's sidebar and enter the password. In a terminal, <code>launch setup</code> does the same.</p>
           <ul>
             <li>It asks for the tablet's SSH password one time.</li>
             <li>It creates a key for this computer and installs it on the tablet, so the password is not needed again.</li>
@@ -723,7 +730,7 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
           </details>
           <details>
             <summary>Sync fails, or the key is rejected</summary>
-            <div><p>Run <code>launch setup</code> again with the tablet on USB. It is safe to repeat. A software update or a reset on the tablet can remove the installed key.</p></div>
+            <div><p>Open <b>Settings</b> and choose <b>Set up the tablet again</b>, with the tablet on USB. It is safe to repeat. A software update or a reset on the tablet can remove the installed key.</p></div>
           </details>
           <details>
             <summary>It doesn't find the tablet on Wi-Fi</summary>

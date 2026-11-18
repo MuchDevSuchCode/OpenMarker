@@ -1,6 +1,6 @@
 [project]
 name = "openmarker"
-version = "0.1.0"
+dynamic = ["version"]
 description = "OpenMarker: an open, local-first companion for e-ink paper tablets"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -20,6 +20,8 @@ dependencies = [
     # The optional AI features (off until switched on in Settings).
     "anthropic>=1.0",
     # Handwriting recognition uses the recogniser built into Windows.
+    # The icon of the installed app in the notification area (Windows) or menu bar (macOS).
+    "pystray>=0.19; sys_platform == 'win32' or sys_platform == 'darwin'",
     "winrt-runtime; sys_platform == 'win32'",
     "winrt-Windows.Foundation; sys_platform == 'win32'",
     "winrt-Windows.Foundation.Numerics; sys_platform == 'win32'",
@@ -28,6 +30,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# Building the installers (see packaging/).
+build = ["pyinstaller>=6.11"]
 
 [project.urls]
 Repository = "https://github.com/MuchDevSuchCode/OpenMarker"
@@ -35,12 +39,19 @@ Repository = "https://github.com/MuchDevSuchCode/OpenMarker"
 [project.scripts]
 openmarker = "openmarker.__main__:main"
 
+# The app without a terminal window (what the installers install).
+[project.gui-scripts]
+openmarker-app = "openmarker.app:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.dynamic]
+version = {attr = "openmarker.__version__"}
 
 [tool.setuptools.package-data]
 openmarker = ["static/*"]

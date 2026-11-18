@@ -9,10 +9,13 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import re
 import socket
 import subprocess
+import sys
 import tarfile
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -40,6 +43,14 @@ class PullResult:
     pruned: bool
 
 
+# Programs started from an app that has no console window must not open one of their own.
+QUIET: dict = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+
+
+class SetupError(RuntimeError):
+    """Authorising this computer on the tablet failed, for a reason worth showing."""
+
+
 def key_path() -> Path:
     return Path.home() / "openmarker" / "id_ed25519"
 
@@ -59,11 +70,12 @@ def _ssh_args(use_key: bool = True) -> list[str]:
 
 
 def _ssh(host: str, command: str, stdin: bytes | None = None, use_key: bool = True) -> bytes:
+    feed = {"stdin": subprocess.DEVNULL} if stdin is None else {"input": stdin}
     proc = subprocess.run(
-        _ssh_args(use_key) + [f"root@{host}", command], input=stdin, stdout=subprocess.PIPE, check=False
+        _ssh_args(use_key) + [f"root@{host}", command], stdout=subprocess.PIPE, check=False, **feed, **QUIET
     )
     if proc.returncode != 0:
-        hint = " (if the key was rejected, run `openmarker setup` again)" if use_key else ""
+        hint = " (if the tablet no longer accepts this computer, set it up again in Settings)" if use_key else ""
         raise RuntimeError(f"ssh to {host} failed with exit code {proc.returncode}{hint}")
     return proc.stdout
 
@@ -88,31 +100,118 @@ def is_ours(host: str) -> bool:
         return False
     proc = subprocess.run(
         _ssh_args() + ["-o", "ConnectTimeout=4", f"root@{host}", "true"],
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False, **QUIET,
     )
     return proc.returncode == 0
 
 
-def setup(host: str = USB_HOST) -> None:
+ASKPASS = "OPENMARKER_ASKPASS"  # set in the environment of the ssh that asks us for the password
+
+
+def answer_askpass() -> bool:
+    """If ssh started this program to ask for the password, print it and say so.
+
+    Called first thing by every entry point: with a password given to setup(),
+    ssh is told to run this program again instead of prompting on a terminal.
+    """
+    secret = os.environ.get(ASKPASS)
+    if secret is None:
+        return False
+    data = (secret + "\n").encode("utf-8")
+    try:
+        os.write(1, data)
+    except OSError:
+        sys.stdout.buffer.write(data)
+        sys.stdout.flush()
+    return True
+
+
+def _askpass_program(folder: Path) -> str:
+    """A program ssh can run that answers with the password in its environment."""
+    if getattr(sys, "frozen", False):
+        return sys.executable  # the installed app answers for itself
+    if sys.platform == "win32":
+        script = folder / "askpass.cmd"
+        script.write_text(f'@"{sys.executable}" -c "from openmarker import tablet; tablet.answer_askpass()"\r\n', encoding="utf-8")
+    else:
+        script = folder / "askpass.sh"
+        script.write_text(f'#!/bin/sh\nexec "{sys.executable}" -c "from openmarker import tablet; tablet.answer_askpass()"\n', encoding="utf-8")
+        script.chmod(0o700)
+    return str(script)
+
+
+def _authorise(host: str, public: str, install: str, password: str) -> None:
+    """Install our key using the given password, with no terminal involved."""
+    with tempfile.TemporaryDirectory() as folder:
+        env = dict(os.environ)
+        env.update({ASKPASS: password, "SSH_ASKPASS": _askpass_program(Path(folder)), "SSH_ASKPASS_REQUIRE": "force"})
+        env.setdefault("DISPLAY", "openmarker:0")  # older ssh only uses the helper when this is set
+        env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
+        try:
+            proc = subprocess.run(
+                _ssh_args(use_key=False) + ["-o", "NumberOfPasswordPrompts=1", f"root@{host}", install],
+                input=public.encode("utf-8"), stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                env=env, check=False, timeout=60, **QUIET,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise SetupError("The tablet did not answer in time. Wake it and try again.") from exc
+        except FileNotFoundError as exc:
+            raise SetupError("The ssh program was not found on this computer.") from exc
+    if proc.returncode == 0:
+        return
+    said = proc.stderr.decode("utf-8", "replace").lower()
+    if "permission denied" in said:
+        raise SetupError("The tablet did not accept that password. Check it on the tablet and try again.")
+    if "host key" in said or "identification has changed" in said:
+        raise SetupError("The device at that address is not the tablet this computer was set up with.")
+    raise SetupError("The tablet could not be reached. Wake it, connect it by USB and try again.")
+
+
+def setup(host: str = USB_HOST, password: str | None = None) -> None:
     """Create this machine's key if needed and authorise it on the tablet.
 
-    ssh prompts for the tablet's password once. Safe to run again: the key
-    is only appended to the tablet's authorized_keys if it is not there yet.
+    With no password, ssh prompts for it on the terminal. Given one (from the
+    browser, where there is no terminal), it is handed to ssh directly. Safe
+    to run again: the key is only appended to the tablet's authorized_keys if
+    it is not there yet. If authorising fails the first time, nothing is left
+    behind, so the app does not believe it is set up.
     """
     key = key_path()
-    if not key.exists():
+    created = not key.exists()
+    if created:
         key.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(
             ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "openmarker", "-f", str(key)],
-            check=True,
+            check=True, stdin=subprocess.DEVNULL, **QUIET,
         )
+    # Typing the password again is a fresh introduction: a tablet that was reset
+    # presents a new identity, which the record of the old one would refuse.
+    known = key.with_name("known_hosts")
+    before = known.read_bytes() if password is not None and known.exists() else None
+    if before is not None:
+        known.unlink()
+    try:
+        _setup(host, key, password)
+    except Exception:
+        if created:
+            key.unlink(missing_ok=True)
+            key.with_suffix(".pub").unlink(missing_ok=True)
+        if before is not None:
+            known.write_bytes(before)
+        raise
+
+
+def _setup(host: str, key: Path, password: str | None) -> None:
     public = key.with_suffix(".pub").read_text(encoding="utf-8").strip()
     install = (
         "mkdir -p ~/.ssh && chmod 700 ~/.ssh && k=$(cat) && "
         "{ grep -qxF \"$k\" ~/.ssh/authorized_keys 2>/dev/null || echo \"$k\" >> ~/.ssh/authorized_keys; } && "
         "chmod 600 ~/.ssh/authorized_keys"
     )
-    _ssh(host, install, stdin=public.encode("utf-8"), use_key=False)
+    if password is None:
+        _ssh(host, install, stdin=public.encode("utf-8"), use_key=False)
+    else:
+        _authorise(host, public, install, password)
     if _ssh(host, "echo ok").strip() != b"ok":
         raise RuntimeError("key was installed but key login did not work")
 
@@ -163,7 +262,7 @@ def changes(host: str, interval: int = 2):
     command = _WATCH.format(store=REMOTE_STORE, skip=SKIP[0], interval=int(interval))
     process = subprocess.Popen(
         _ssh_args() + ["-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=2", f"root@{host}", command],
-        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **QUIET,
     )
     try:
         first = True
@@ -269,7 +368,7 @@ def _web_service(host: str):
     tunnel = subprocess.Popen(
         _ssh_args() + ["-N", "-o", "ExitOnForwardFailure=yes",
                        "-L", f"127.0.0.1:{port}:{WEB_SERVICE[0]}:{WEB_SERVICE[1]}", f"root@{host}"],
-        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **QUIET,
     )
     try:
         base = f"http://127.0.0.1:{port}"

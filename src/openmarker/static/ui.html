@@ -186,6 +186,17 @@
   .sheet input.switch:checked::before { transform: translateX(20px); }
   .settings-foot { display: flex; align-items: center; gap: 8px; padding: 14px 24px; border-top: 1px solid var(--line); }
   .settings-foot .error { flex: 1; color: var(--accent); font-size: 13.5px; }
+  .settings-foot .set-link { margin: 0; }
+  .settings-foot small { color: var(--muted); font-size: 12.5px; }
+  .notice .btn { margin-top: 8px; width: 100%; }
+  .setup label { display: block; margin-top: 14px; font-weight: 600; font-size: 13.5px; }
+  .setup label small { display: block; font-weight: 400; color: var(--muted); margin: 2px 0 6px; }
+  .setup input { width: 100%; }
+  .setup ol { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+  .setup .error { color: var(--accent); font-size: 13.5px; min-height: 1.4em; margin: 10px 0 0; }
+  .stopped { grid-column: 1 / -1; margin: 18vh auto 0; max-width: 460px; padding: 0 24px; text-align: center; }
+  .stopped h1 { font-family: var(--serif); font-weight: 600; }
+  .stopped p { color: var(--muted); }
   @media (max-width: 600px) {
     .settings-head, .settings-body, .settings-foot { padding-left: 16px; padding-right: 16px; }
     .set-row { grid-template-columns: minmax(0, 1fr); }
@@ -299,7 +310,7 @@
     <small id="last">&nbsp;</small>
     <button class="set-link" id="outbox" hidden aria-haspopup="dialog"></button>
     <button class="btn primary" id="sync" disabled>Sync now</button>
-    <div class="notice" id="notice" hidden></div>
+    <div class="notice" id="notice" hidden>One-time step: let this computer talk to your tablet.<button class="btn primary" id="setup-open" aria-haspopup="dialog">Set up tablet</button></div>
     <button class="btn quiet" id="open-settings" aria-haspopup="dialog"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>Settings</button>
   </div>
 </aside>
@@ -402,6 +413,26 @@
     </div>
   </form>
 </dialog>
+<dialog class="sheet setup" id="setup" aria-labelledby="setup-title">
+  <form id="setup-form">
+    <h3 id="setup-title">Set up your tablet</h3>
+    <ol>
+      <li>On the tablet, switch on developer mode if you have not yet.</li>
+      <li>Connect the tablet to this computer with its USB cable and wake it.</li>
+      <li>On the tablet open <b>Settings › Help › About › Copyrights and licenses</b>. The password is shown under <b>General information</b>.</li>
+    </ol>
+    <label for="setup-password">The tablet's password<small>Used once to authorise this computer. It is not saved.</small></label>
+    <input id="setup-password" type="password" required maxlength="200" autocomplete="off" spellcheck="false">
+    <label for="setup-host">Wi-Fi address<small>Only if you are not using the USB cable. It is shown on the same screen of the tablet.</small></label>
+    <input id="setup-host" type="text" maxlength="253" placeholder="Leave empty for USB" autocomplete="off" spellcheck="false">
+    <p class="error" id="setup-error" role="alert"></p>
+    <div class="row">
+      <button type="button" class="pill" id="setup-cancel">Cancel</button>
+      <button class="pill accent" id="setup-go">Connect</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog class="sheet settings" id="settings" aria-labelledby="settings-title">
   <form id="settings-form">
     <div class="settings-head">
@@ -415,6 +446,8 @@
           <input id="set-wifi" placeholder="e.g. 192.168.1.50" autocomplete="off" spellcheck="false" maxlength="253"></label>
         <label class="set-row"><span><b>Tablet name</b><small>The name the tablet announces on your network (mDNS). It is used to find the tablet again when its address changes, and is learned the first time the tablet connects.</small></span>
           <span class="affix"><input id="set-name" placeholder="learned automatically" autocomplete="off" spellcheck="false" maxlength="70"><span>.local</span></span></label>
+        <div class="set-row inline"><span><b>This computer and the tablet</b><small>If the tablet stops accepting this computer, for example after it was reset, set it up again.</small></span>
+          <span class="value"><button type="button" class="set-link" id="set-setup">Set up the tablet again</button></span></div>
       </section>
       <section class="set-group">
         <h4>Sync</h4>
@@ -474,6 +507,8 @@
       </section>
     </div>
     <div class="settings-foot">
+      <button type="button" class="set-link" id="set-quit">Quit OpenMarker</button>
+      <small id="set-version"></small>
       <span class="error" id="set-error" role="alert"></span>
       <button type="button" class="pill" id="set-cancel">Cancel</button>
       <button class="pill accent" id="set-save">Save</button>
@@ -960,8 +995,44 @@ async function loadStatus() {
   if (was && s.last_sync && s.last_sync !== was.last_sync) loadLibrary(true);
   const notice = $("notice");
   notice.hidden = s.set_up;
-  if (!s.set_up) notice.innerHTML = "One-time step: run <code>python -m openmarker setup</code> in a terminal to authorise this computer.";
+  $("set-version").textContent = s.version ? `OpenMarker ${s.version}` : "";
 }
+
+// The one-time step: let this computer talk to the tablet, using the tablet's own password.
+$("setup-open").onclick = () => {
+  $("setup-form").reset();
+  $("setup-error").textContent = "";
+  $("setup-host").value = state.status?.wifi_host || "";
+  $("setup").showModal();
+  $("setup-password").focus();
+};
+$("set-setup").onclick = () => { $("settings").close(); $("setup-open").onclick(); };
+$("setup-cancel").onclick = () => $("setup").close();
+$("setup-form").onsubmit = async event => {
+  event.preventDefault();
+  const go = $("setup-go");
+  go.disabled = true; go.textContent = "Connecting…";
+  $("setup-error").textContent = "";
+  let result;
+  try { result = await api("/api/setup", { password: $("setup-password").value, host: $("setup-host").value.trim() }); }
+  catch (error) { result = { ok: false, error: error.message }; }
+  go.disabled = false; go.textContent = "Connect";
+  if (!result.ok) { $("setup-error").textContent = result.error || "That didn't work."; $("setup-password").select(); return; }
+  $("setup").close();
+  await loadStatus();
+  toast("This computer is set up with the tablet. Press Sync now to fetch your documents.");
+};
+$("setup").addEventListener("close", () => { $("setup-password").value = ""; });  // the password does not linger in the page
+
+$("set-quit").onclick = async () => {
+  const sure = await ask({ title: "Quit OpenMarker?", text: "Syncing and sending stop until you start OpenMarker again.", ok: "Quit" });
+  if (!sure) return;
+  try { await api("/api/quit", {}); } catch { return toast("OpenMarker did not stop."); }
+  clearInterval(statusTimer);
+  document.body.replaceChildren(el("div", { className: "stopped" },
+    el("h1", { textContent: "OpenMarker has stopped" }),
+    el("p", { textContent: "Start it again from the Start menu or your Applications folder, then reload this page." })));
+};
 
 $("sync").onclick = async () => {
   const button = $("sync");
@@ -1474,7 +1545,7 @@ addEventListener("hashchange", route);
 
 loadLibrary();
 loadStatus();
-setInterval(loadStatus, 3000);
+const statusTimer = setInterval(loadStatus, 3000);
 // Browsers slow the timer of a page that is not in view; catch up the moment it is looked at again.
 document.addEventListener("visibilitychange", () => { if (!document.hidden) loadStatus(); });
 addEventListener("focus", loadStatus);

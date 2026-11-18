@@ -148,7 +148,7 @@ def after_sync(mirror: Path, hashes: dict[str, str], changed: list[str]) -> dict
                 OPENMARKER_TAGS=",".join(item.tags),
                 OPENMARKER_MIRROR=str(mirror),
             )
-            subprocess.run(command, shell=True, env=env, check=False, timeout=300)
+            subprocess.run(command, shell=True, env=env, check=False, timeout=300, stdin=subprocess.DEVNULL, **tablet.QUIET)
             report["hooks"] += 1
     return report
 

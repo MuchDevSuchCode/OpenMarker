@@ -1,0 +1,117 @@
+name: Installers
+
+# Builds the Windows installer and the macOS disk image.
+#   - Pushing a tag like v0.1.0 builds both and publishes them as a release.
+#   - "Run workflow" on the Actions page, or a change to the packaging itself,
+#     builds both and keeps them as downloadable artifacts of the run.
+on:
+  push:
+    tags: ["v*"]
+    branches: [main]
+    paths:
+      - "packaging/**"
+      - ".github/workflows/installers.yml"
+      - "pyproject.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: python -m pip install --disable-pip-version-check -e ".[build]"
+
+      - name: Tests
+        run: python -m unittest discover -s tests
+        env:
+          PYTHONPATH: src
+
+      - name: Check the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version=$(PYTHONPATH=src python -c "import openmarker; print(openmarker.__version__)")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::The tag is $GITHUB_REF_NAME but src/openmarker/__init__.py says $version"
+            exit 1
+          fi
+
+      # Freezes the app, runs its self-test, then wraps it (Inno Setup is already on the Windows runner).
+      - name: Build the installer
+        shell: bash
+        run: |
+          if ! python packaging/build.py > build.log 2>&1; then
+            tail -n 60 build.log
+            echo "::error::Build failed: $(grep -E 'FAILED|Error|error:' build.log | tail -n 8 | tr '\n' '|' | cut -c1-900)"
+            exit 1
+          fi
+          tail -n 25 build.log
+
+      # Start the packaged app as a user would, and see that it answers and stops when asked.
+      - name: Start the packaged app
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then app="dist/OpenMarker/OpenMarker.exe"; else app="dist/OpenMarker.app/Contents/MacOS/OpenMarker"; fi
+          "$app" --background &
+          answered=no
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8737/api/status > status.json 2>/dev/null; then answered=yes; break; fi
+            sleep 1
+          done
+          cat status.json 2>/dev/null || true
+          echo
+          "$app" --quit || true
+          sleep 5
+          log="$HOME/openmarker/openmarker.log"
+          [ "$RUNNER_OS" = "Windows" ] && log="$USERPROFILE/openmarker/openmarker.log"
+          echo "--- log"; cat "$log" 2>/dev/null || true
+          if [ "$answered" != yes ]; then
+            echo "::error::The packaged app did not answer: $(tail -n 5 "$log" 2>/dev/null | tr '\n' '|' | cut -c1-900)"
+            exit 1
+          fi
+          if curl -fsS http://127.0.0.1:8737/api/status > /dev/null 2>&1; then
+            echo "::error::The packaged app did not stop when asked"
+            exit 1
+          fi
+          if grep -q "no icon\|the icon stopped" "$log" 2>/dev/null; then
+            echo "::warning::The app ran without its icon: $(grep 'icon' "$log" | head -n 2 | tr '\n' '|' | cut -c1-600)"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ runner.os }}
+          path: |
+            dist/*-setup.exe
+            dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" installers/* \
+            --repo "$GITHUB_REPOSITORY" --title "OpenMarker ${GITHUB_REF_NAME#v}" --generate-notes

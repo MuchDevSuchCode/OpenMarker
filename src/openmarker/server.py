@@ -3,9 +3,15 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import re
+import shutil
+import socket
+import subprocess
+import sys
 import threading
 import time
+import urllib.request
 import webbrowser
 import zipfile
 from datetime import date
@@ -14,9 +20,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import ai, export, generate, history, images, ink, library, ocr, outbox, render, scene, tablet, workflow
+from . import __version__, ai, export, generate, history, images, ink, library, ocr, outbox, render, scene, tablet, workflow
 
-PORT = 8737
+PORT = int(os.environ.get("OPENMARKER_PORT") or 8737)  # the variable is for running a second copy, e.g. in tests
 AUTO_SYNC_SECONDS = 30
 MAX_UPLOAD = 500 * 1024 * 1024
 UUID = r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}"
@@ -49,11 +55,45 @@ def store_dir() -> tuple[Path, str]:
 
 def require_tablet() -> str:
     if not tablet.is_set_up():
-        raise UserError("Run setup first: python -m openmarker setup")
+        raise UserError("Set up the tablet first: choose Set up tablet in the sidebar.")
     host = _seen[0] or workflow.find_tablet()[0]
     if host is None:
         raise UserError("The tablet isn't reachable. Wake it and connect USB or Wi-Fi.")
     return host
+
+
+def setup(body: dict) -> dict:
+    """Authorise this computer on the tablet with the tablet's password (the one-time step)."""
+    global _seen
+    password = body.get("password")
+    if not isinstance(password, str) or not password or len(password) > 200:
+        raise UserError("Enter the tablet's password.")
+    host = str(body.get("host") or "").strip()
+    if host and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.:-]{0,252}", host):
+        raise UserError("That is not a usable address.")
+    if not host:
+        if not workflow.reachable(tablet.USB_HOST):
+            raise UserError("The tablet wasn't found on USB. Connect its cable and wake it, or enter its Wi-Fi address.")
+        host = tablet.USB_HOST
+    elif not workflow.reachable(host, 3):
+        raise UserError("Nothing answered at that address. Wake the tablet and check the address.")
+    if not shutil.which("ssh") or not shutil.which("ssh-keygen"):
+        raise UserError("This computer has no ssh program, which OpenMarker uses to reach the tablet. "
+                        "On Windows add it under Settings › System › Optional features › OpenSSH Client, then try again.")
+    try:
+        tablet.setup(host, password)
+    except tablet.SetupError as exc:
+        raise UserError(str(exc)) from exc
+    except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+        raise UserError("Set-up did not finish. Wake the tablet and try again.") from exc
+    if host != tablet.USB_HOST:
+        workflow.update_config(wifi_host=host)
+    try:
+        workflow.remember_name(host)
+    except (RuntimeError, OSError):
+        pass
+    _seen = (host, "USB" if host == tablet.USB_HOST else "Wi-Fi")
+    return {"ok": True}
 
 
 def _pack(files: dict[str, bytes]) -> bytes:
@@ -87,7 +127,7 @@ def send(name: str, kind: str, data: bytes, parent: str = "", setting: str = "")
     Returns whether it was delivered now. What is kept goes out with the next sync.
     """
     if not tablet.is_set_up():
-        raise UserError("Run setup first: python -m openmarker setup")
+        raise UserError("Set up the tablet first: choose Set up tablet in the sidebar.")
     host = _seen[0] or workflow.find_tablet()[0]
     if host:
         try:
@@ -179,6 +219,7 @@ def status() -> dict:
         "subject_cutout": images.subject_available(),
         "ai": ai.enabled(),
         "outbox": len(outbox.entries()),
+        "version": __version__,
     }
 
 
@@ -896,6 +937,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(body_png)
             elif action == "sync":
                 self._json(sync())
+            elif action == "setup":
+                self._json(setup(body))
+            elif action == "quit":
+                self._json({"ok": True})
+                threading.Thread(target=self.server.shutdown, daemon=True).start()
             elif action == "config":
                 changes, key = settings_changes(body), api_key_change(body)
                 workflow.update_config(**changes)
@@ -912,13 +958,48 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"ok": False, "error": str(exc)})
 
 
-def serve(port: int = PORT, open_browser: bool = True) -> None:
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+class Server(ThreadingHTTPServer):
+    def handle_error(self, request, client_address) -> None:
+        """A browser that went away mid-reply is not worth a traceback in the log."""
+        if not isinstance(sys.exc_info()[1], ConnectionError):
+            super().handle_error(request, client_address)
+
+
+def address(port: int = PORT) -> str:
+    return f"http://127.0.0.1:{port}/"
+
+
+def running(port: int = PORT) -> bool:
+    """Whether a copy of OpenMarker is already serving on this port."""
+    try:
+        with urllib.request.urlopen(f"{address(port)}api/status", timeout=3) as response:
+            return "set_up" in json.loads(response.read())
+    except (OSError, ValueError):
+        return False
+
+
+def start(port: int = PORT) -> ThreadingHTTPServer:
+    """Bind the server and start the background work. The caller runs serve_forever()."""
+    with socket.socket() as probe:  # Windows would let a second copy bind the same port
+        probe.settimeout(1)
+        if probe.connect_ex(("127.0.0.1", port)) == 0:
+            raise OSError(f"port {port} is already in use")
+    server = Server(("127.0.0.1", port), Handler)
     threading.Thread(target=_index_existing, daemon=True).start()
     threading.Thread(target=_auto_sync_loop, daemon=True).start()
     threading.Thread(target=_watch_tablet, daemon=True).start()
     threading.Thread(target=_follow_tablet, daemon=True).start()
-    url = f"http://127.0.0.1:{port}/"
+    return server
+
+
+def serve(port: int = PORT, open_browser: bool = True) -> None:
+    url = address(port)
+    if running(port):
+        print(f"OpenMarker is already running at {url}")
+        if open_browser:
+            webbrowser.open(url)
+        return
+    server = start(port)
     print(f"OpenMarker is running at {url}  (Ctrl+C to stop)")
     if open_browser:
         webbrowser.open(url)

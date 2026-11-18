@@ -167,7 +167,15 @@ def cmd_ui(args: argparse.Namespace) -> None:
     server.serve(args.port, open_browser=not args.no_browser)
 
 
+def cmd_selftest(args: argparse.Namespace) -> None:
+    from . import selftest
+
+    sys.exit(selftest.run())
+
+
 def main() -> None:
+    if tablet.answer_askpass():  # ssh asking this program for the password during set-up
+        return
     parser = argparse.ArgumentParser(prog="openmarker")
     sub = parser.add_subparsers(dest="command", required=True)
     host_help = "tablet address (default: USB if connected, otherwise the saved Wi-Fi address)"
@@ -222,6 +230,9 @@ def main() -> None:
     agenda.add_argument("--calendar", help=".ics file or address (default: `calendar` in config.json)")
     agenda.add_argument("--host", help=host_help)
     agenda.set_defaults(func=cmd_agenda)
+
+    selftest = sub.add_parser("selftest", help="check that every part of the app works in this installation")
+    selftest.set_defaults(func=cmd_selftest)
 
     args = parser.parse_args()
     args.func(args)
