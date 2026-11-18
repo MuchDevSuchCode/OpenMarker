@@ -254,18 +254,24 @@ _WATCH = (
 )
 
 
-def changes(host: str, interval: int = 2):
+def changes(host: str, interval: int = 2, keepalive: int = 10, started=None):
     """Yield once each time the tablet's documents change, for as long as the tablet stays reachable.
 
     One connection stays open and the tablet does the watching, so a change
     is known a few seconds after it happens. Ends when the connection drops
-    (the tablet slept or left the network).
+    (the tablet slept or left the network). The tablet looks at its files
+    every `interval` seconds; every `keepalive` seconds of silence this
+    computer asks whether the tablet is still there, and gives up after two
+    unanswered tries. `started` is called with the running ssh process, so
+    that the watch can be ended from elsewhere by terminating it.
     """
     command = _WATCH.format(store=REMOTE_STORE, skip=SKIP[0], interval=int(interval))
     process = subprocess.Popen(
-        _ssh_args() + ["-o", "ServerAliveInterval=10", "-o", "ServerAliveCountMax=2", f"root@{host}", command],
+        _ssh_args() + ["-o", f"ServerAliveInterval={int(keepalive)}", "-o", "ServerAliveCountMax=2", f"root@{host}", command],
         stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **QUIET,
     )
+    if started:
+        started(process)
     try:
         first = True
         for line in process.stdout:

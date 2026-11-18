@@ -7,6 +7,8 @@ Settings live in `config.json` in the data folder (`~/openmarker`, or an account
                                  the name the tablet announces on the network; it is
                                  looked up as <name>.local when its address changes
     "auto_sync": true            sync in the background while the UI is running
+    "watch_seconds": 2           with auto_sync: how often the tablet checks its files for changes
+    "keepalive_seconds": 10      with auto_sync: how often the open connection is checked
     "advanced": true             show every setting the tablet stores (see tabletconfig.py)
     "calendar": "https://…/basic.ics"
                                  calendar (.ics file or address) for the agenda page

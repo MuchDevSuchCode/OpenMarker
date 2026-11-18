@@ -667,6 +667,8 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
             <tr><td><code>wifi_host</code></td><td>The tablet's last known Wi-Fi address. Kept up to date automatically.</td></tr>
             <tr><td><code>tablet_name</code></td><td>The name the tablet announces on the network. It is looked up as <code>name.local</code> when the address changes, and learned on first connection.</td></tr>
             <tr><td><code>auto_sync</code></td><td>Sync in the background while OpenMarker is running.</td></tr>
+            <tr><td><code>watch_seconds</code></td><td>With <code>auto_sync</code>: seconds between the tablet's checks of its files for changes, 1 to 300. Default 2. Longer is easier on the tablet's battery.</td></tr>
+            <tr><td><code>keepalive_seconds</code></td><td>With <code>auto_sync</code>: seconds between the messages that keep the connection to the tablet open, 5 to 300. Default 10.</td></tr>
             <tr><td><code>calendar</code></td><td>An <code>.ics</code> file or address for the agenda page.</td></tr>
             <tr><td><code>markdown_dir</code></td><td>After each sync, export changed notebooks into this folder.</td></tr>
             <tr><td><code>markdown_tag</code></td><td>Only export documents carrying this tag.</td></tr>

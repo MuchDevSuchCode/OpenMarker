@@ -300,6 +300,8 @@ in the file. Settings in `config.json`:
 | `wifi_host` | The tablet's last known Wi-Fi address. Kept up to date automatically. |
 | `tablet_name` | The name the tablet announces on the network. Looked up as `<name>.local` when the address changes; learned on first connection. |
 | `auto_sync` | Sync in the background while OpenMarker is running. |
+| `watch_seconds` | With `auto_sync`: seconds between the tablet's checks of its files for changes, 1 to 300. Default 2. Longer is easier on the tablet's battery. |
+| `keepalive_seconds` | With `auto_sync`: seconds between the messages that keep the connection to the tablet open, 5 to 300. Default 10. |
 | `advanced` | Show every setting the tablet stores in Tablet settings. Off by default. |
 | `calendar` | An `.ics` file or address for the agenda page. |
 | `markdown_dir` | After each sync, export changed notebooks into this folder. |

@@ -51,6 +51,7 @@ class _Work:
         self.sync_lock = threading.Lock()
         self.gone = threading.Event()  # set when the account is removed, to end its background work
         self.started = False
+        self.watch = None  # the open connection that follows changes on the tablet, while there is one
 
 
 _works: dict[Path, _Work] = {}
@@ -265,6 +266,8 @@ def settings_json() -> dict:
         "ai_fallback": ai.fallback(),
         **{name: ai.number(name) for name in ai.NUMBERS},
         "ai_limits": {name: list(limits) for name, limits in ai.NUMBERS.items()},
+        **{name: sync_number(name) for name in SYNC_NUMBERS},
+        "sync_limits": {name: list(limits) for name, limits in SYNC_NUMBERS.items()},
         "agenda_folder": config.get("agenda_folder", DEFAULT_AGENDA_FOLDER),
         "ai_summary_folder": config.get("ai_summary_folder") or "",
         "ai_answer_folder": config.get("ai_answer_folder") or "",
@@ -332,7 +335,7 @@ def settings_changes(body: dict) -> dict:
         if not isinstance(body["ai_fallback"], bool):
             raise UserError("The fallback setting must be true or false.")
         changes["ai_fallback"] = body["ai_fallback"]
-    for name, (_, low, high) in ai.NUMBERS.items():
+    for name, (_, low, high) in {**ai.NUMBERS, **SYNC_NUMBERS}.items():
         if name in body:
             if type(body[name]) is not int or not low <= body[name] <= high:
                 raise UserError(f"{NUMBER_LABELS[name]} must be a whole number from {low:,} to {high:,}.")
@@ -346,7 +349,30 @@ def settings_changes(body: dict) -> dict:
 
 
 DEFAULT_AGENDA_FOLDER = "Agenda"
-NUMBER_LABELS = {"ai_max_tokens": "Longest reply", "ai_pages": "Pages at a time", "ai_picture_width": "Page picture width"}
+NUMBER_LABELS = {"ai_max_tokens": "Longest reply", "ai_pages": "Pages at a time", "ai_picture_width": "Page picture width",
+                 "watch_seconds": "Check for changes every", "keepalive_seconds": "Keepalive every"}
+# While automatic sync follows the tablet over one open connection: (default, lowest, highest), in seconds.
+SYNC_NUMBERS = {
+    "watch_seconds": (2, 1, 300),  # how often the tablet looks through its files for a change
+    "keepalive_seconds": (10, 5, 300),  # how often this computer asks, over that connection, whether the tablet is still there
+}
+
+
+def sync_number(name: str) -> int:
+    """One of the SYNC_NUMBERS settings, kept within its range."""
+    default, low, high = SYNC_NUMBERS[name]
+    value = workflow.load_config().get(name)
+    return min(high, max(low, value)) if type(value) is int else default
+
+
+def rewatch() -> None:
+    """End the connection that follows the tablet; _follow_tablet opens it again with the settings as they are now."""
+    process = _work().watch
+    if process:
+        try:
+            process.terminate()
+        except OSError:
+            pass
 FOLDER_LABELS = {"agenda_folder": "Agenda folder", "ai_summary_folder": "Summaries folder", "ai_answer_folder": "Answers folder"}
 
 
@@ -692,7 +718,8 @@ def _follow_tablet() -> None:
         try:
             host = work.seen[0]
             if host and tablet.is_set_up() and workflow.load_config().get("auto_sync"):
-                for _ in tablet.changes(host):
+                for _ in tablet.changes(host, sync_number("watch_seconds"), sync_number("keepalive_seconds"),
+                                        started=lambda process: setattr(work, "watch", process)):
                     if work.gone.is_set() or not workflow.load_config().get("auto_sync"):
                         break
                     try:
@@ -701,6 +728,7 @@ def _follow_tablet() -> None:
                         pass
         except Exception:  # the watcher must never take the server down
             pass
+        work.watch = None
         work.gone.wait(WATCH_SECONDS)
 
 
@@ -1169,7 +1197,10 @@ class Handler(BaseHTTPRequestHandler):
                 before = workflow.load_config().get("markdown_dir") or ""
                 if not self._admin() and (changes.get("markdown_dir", before) or "") != before:
                     raise UserError("Only an administrator can choose a folder on this computer.")
+                timing = {name: sync_number(name) for name in SYNC_NUMBERS}
                 workflow.update_config(**changes)
+                if timing != {name: sync_number(name) for name in SYNC_NUMBERS}:
+                    rewatch()
                 if key is not False:
                     ai.save_key(key)
                 self._json({"ok": True})

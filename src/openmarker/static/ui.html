@@ -532,6 +532,10 @@
         <h4>Sync</h4>
         <label class="set-row inline"><span><b>Sync automatically</b><small>Sync in the background while OpenMarker is running, and as soon as the tablet appears.</small></span>
           <input type="checkbox" class="switch" id="set-auto" role="switch"></label>
+        <label class="set-row"><span><b>Check for changes every</b><small>Seconds between the tablet's checks of its files while automatic sync is on and the tablet is awake. Longer is easier on the tablet's battery; changes then arrive that much later. <span id="lim-watch_seconds"></span></small></span>
+          <input type="number" id="set-watch" step="1" inputmode="numeric" required></label>
+        <label class="set-row"><span><b>Keepalive every</b><small>Seconds between the small messages that keep that connection open and notice the tablet leaving. Longer keeps the tablet's Wi-Fi quieter; a tablet that has gone is then noticed later. <span id="lim-keepalive_seconds"></span></small></span>
+          <input type="number" id="set-keepalive" step="1" inputmode="numeric" required></label>
       </section>
       <section class="set-group">
         <h4>Agenda page</h4>
@@ -1351,7 +1355,7 @@ $("open-settings").onclick = async () => {
   $("set-ai-effort").value = c.ai_effort;
   $("set-ai-fallback").checked = c.ai_fallback;
   for (const [name, id] of Object.entries(NUMBER_FIELDS)) {
-    const [, low, high] = c.ai_limits[name];
+    const [, low, high] = c.ai_limits[name] || c.sync_limits[name];
     Object.assign($(id), { value: c[name], min: low, max: high });
     $(`lim-${name}`).textContent = `${low.toLocaleString()} to ${high.toLocaleString()}.`;
   }
@@ -1370,7 +1374,7 @@ $("open-settings").onclick = async () => {
 };
 const settings = { key: "", clearKey: false };
 const EFFORT_NAMES = { low: "Low (fastest, costs least)", medium: "Medium", high: "High", xhigh: "Extra high", max: "Maximum (slowest, costs most)" };
-const NUMBER_FIELDS = { ai_max_tokens: "set-ai-max-tokens", ai_pages: "set-ai-pages", ai_picture_width: "set-ai-width" };
+const NUMBER_FIELDS = { ai_max_tokens: "set-ai-max-tokens", ai_pages: "set-ai-pages", ai_picture_width: "set-ai-width", watch_seconds: "set-watch", keepalive_seconds: "set-keepalive" };
 const MODEL_NAMES = {
   "claude-opus-5-5": "Claude Opus 5.5 (recommended)", "claude-sonnet-5-5": "Claude Sonnet 5.5 (costs less)",
   "claude-haiku-5-5": "Claude Haiku 5.5 (costs least)", "claude-fable-5-2": "Claude Fable 5.2 (most capable, costs most)",

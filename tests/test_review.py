@@ -102,6 +102,10 @@ class SettingsTests(unittest.TestCase):
 
     def test_only_settings_that_were_sent_change(self):
         self.assertEqual(server.settings_changes({"auto_sync": True}), {"auto_sync": True})
+        self.assertEqual(server.settings_changes({"watch_seconds": 15, "keepalive_seconds": 60}), {"watch_seconds": 15, "keepalive_seconds": 60})
+        for body in ({"watch_seconds": 0}, {"watch_seconds": 2.5}, {"keepalive_seconds": 4}, {"keepalive_seconds": 301}, {"watch_seconds": "2"}):
+            with self.assertRaises(server.UserError, msg=body):
+                server.settings_changes(body)
         self.assertEqual(server.settings_changes({"hooks": [{"run": "x"}], "last_sync": "x"}), {})
 
     def test_bad_values_are_refused(self):
