@@ -87,8 +87,7 @@ jobs:
             exit 1
           fi
           if [ "$pages" != ok ]; then
-            echo "::error::The packaged app $pages: $(tail -n 5 "$log" 2>/dev/null | tr '
-' '|' | cut -c1-900)"
+            echo "::error::The packaged app $pages: $(tail -n 5 "$log" 2>/dev/null | tr '\n' '|' | cut -c1-900)"
             exit 1
           fi
           if curl -fsS http://127.0.0.1:8737/api/status > /dev/null 2>&1; then
