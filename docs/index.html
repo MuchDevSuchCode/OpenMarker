@@ -212,6 +212,7 @@
         <li><a href="#ai">AI</a></li>
         <li><a href="#install">Install</a></li>
         <li><a href="#device">Set up your tablet</a></li>
+        <li><a href="#configure">Settings</a></li>
         <li><a href="#reference">Reference</a></li>
         <li><a href="#faq">Help</a></li>
         <li><a class="gh" href="https://github.com/MuchDevSuchCode/OpenMarker">GitHub</a></li>
@@ -314,6 +315,16 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>
           <h3>AI, if you want it</h3>
           <p>Off by default. With your own API key: a chat about your notes, summaries, better handwriting to text, and more.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.8a3.5 3.5 0 0 1 0 6.4"/><path d="M18.5 14.5A6.500 6.500 0 0 1 21.500 20"/></svg>
+          <h3>Accounts, if you share it</h3>
+          <p>Optional sign-in. Each person gets their own tablet, library and settings, and the app can then be reached through a tunnel.</p>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h3M11 12h9M4 18h8M16 18h4"/><circle cx="16" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="14" cy="18" r="2"/></svg>
+          <h3>Settings in the app</h3>
+          <p>Sync timing, export, AI and accounts in one sheet, and the tablet's own connection and settings in another. No file to edit.</p>
         </li>
       </ul>
     </div>
@@ -467,7 +478,7 @@
           </ul>
         </div>
         <figure class="shot">
-          <button type="button" aria-label="Enlarge screenshot: a chat about a notebook"><img src="img/chat.webp" width="2040" height="1275" loading="lazy" alt="A chat about a notebook called Shed rebuild. The question And what order did I plan to build it in is answered with a numbered list, followed by buttons for the two pages the answer came from, and Copy and Send to tablet."></button>
+          <button type="button" aria-label="Enlarge screenshot: the chat beside the library"><img src="img/chat.webp" width="2040" height="1275" loading="lazy" alt="The library with a chat column on its right, about a notebook called Shed rebuild. The question And what order did I plan to build it in is answered with a numbered list, followed by buttons for the two pages the answer came from, and Copy and Send to tablet. The column has New chat and Hide buttons."></button>
         </figure>
       </div>
 
@@ -598,27 +609,79 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
         </li>
       </ol>
 
-      <div class="show" style="margin-top:clamp(40px,6vw,72px)">
+      <div class="head" id="configure" style="margin-top:clamp(56px,8vw,104px)">
+        <p class="kicker">Configuration</p>
+        <h2>Change how it works, without editing a file</h2>
+        <p>Two buttons at the bottom of the sidebar: <b>Settings</b> for the app, and <b>Tablet</b> for the device.</p>
+      </div>
+
+      <div class="show">
         <div class="copy">
-          <h3>Everything in one Settings sheet</h3>
-          <p>The options that matter day to day are together in <b>Settings</b>, at the bottom of the sidebar:</p>
+          <h3>Settings: the app</h3>
+          <p>Everything about how OpenMarker behaves on this computer:</p>
           <ul>
-            <li><b>Accounts:</b> an optional sign-in. Each account is a separate person with their own tablet, library and settings, and with a sign-in in place OpenMarker can be reached from elsewhere through a tunnel such as ngrok.</li>
-          </ul>
-          <p>Everything about the device itself is separate, in <b>Tablet</b>:</p>
-          <ul>
-            <li><b>Connection:</b> the tablet's Wi-Fi address, the name it announces on your network, and setting it up again.</li>
-            <li><b>On the tablet:</b> its own name, when it sleeps and powers off, handedness and more, read from the tablet and saved back to it. Saving restarts the tablet's app.</li>
-            <li><b>Advanced:</b> shows every setting the tablet stores, as it is stored. Passwords and saved networks stay hidden.</li>
-            <li><b>Sync:</b> sync automatically in the background.</li>
+            <li><b>Sync:</b> sync automatically in the background, and how often it checks. See below.</li>
             <li><b>Agenda page:</b> the calendar to read events from.</li>
             <li><b>Markdown export:</b> the folder to write notes into, and an optional tag.</li>
             <li><b>Where things go on the tablet:</b> folders for agenda pages, AI summaries and AI answers.</li>
-            <li><b>AI:</b> off unless you switch it on and add a key; then the model, effort and other inference options.</li>
+            <li><b>AI:</b> off unless you switch it on and add a key; then the model, effort and other options.</li>
+            <li><b>Accounts:</b> an optional sign-in for more than one person.</li>
+          </ul>
+          <p><b>Sync timing and the tablet's battery.</b> With <b>Sync automatically</b> on, OpenMarker keeps one connection to the tablet open while the tablet is awake, so a change shows up within seconds. Two numbers decide how much work that is:</p>
+          <ul>
+            <li><b>Check for changes every:</b> seconds between the tablet's checks of its own files. 2 by default, 1 to 300. A longer wait is easier on the battery, and changes arrive that much later.</li>
+            <li><b>Keepalive every:</b> seconds between the small messages that keep the connection open. 10 by default, 5 to 300. A longer wait keeps the tablet's Wi-Fi quieter, and a tablet that has gone to sleep is noticed later.</li>
+          </ul>
+          <p>A change takes effect at once. When the tablet sleeps the connection ends by itself, and nothing runs until it wakes.</p>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: the Settings sheet"><img src="img/settings.webp" width="2040" height="1275" loading="lazy" alt="The Settings sheet. Under Sync: a Sync automatically switch, Check for changes every 2 seconds and Keepalive every 10 seconds. Below that, the calendar for the agenda page and the folder and tag for Markdown export."></button>
+        </figure>
+      </div>
+
+      <div class="show flip">
+        <div class="copy">
+          <h3>Tablet: the device</h3>
+          <p>Everything about the tablet itself is in its own sheet:</p>
+          <ul>
+            <li><b>Connection:</b> the tablet's Wi-Fi address, the name it announces on your network, and setting it up again.</li>
+            <li><b>On the tablet:</b> the settings the tablet keeps in its own settings file, read from it while it is connected and saved back to it. Which ones appear depends on the tablet: it only writes down a setting once it has been changed from its default.</li>
+            <li><b>Advanced:</b> adds every other setting the tablet stores, as it is stored. Passwords, sign-in details and saved networks are never shown and cannot be changed here.</li>
+          </ul>
+          <p>Saving a changed setting restarts the tablet's app, which takes a few seconds. The previous file is kept on the tablet as a backup.</p>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: the Tablet sheet"><img src="img/tablet.webp" width="2040" height="1275" loading="lazy" alt="The Tablet sheet, showing the tablet connected over USB. Under Connection: the Wi-Fi address, the tablet name and a link to set the tablet up again. Under On the tablet: the device name and a USB web interface switch. Under Advanced: a Show advanced settings switch, off."></button>
+          <figcaption>The Tablet sheet: how to reach the device, and what is kept on it.</figcaption>
+        </figure>
+      </div>
+
+      <div class="show">
+        <div class="copy">
+          <h3>Accounts, for more than one person</h3>
+          <p>Accounts are off until you add one, under <b>Settings › Accounts</b>. From then on a browser has to sign in.</p>
+          <ul>
+            <li>Each account is a separate person with their own tablet, library, version history and settings.</li>
+            <li>The first account is the administrator, and keeps the library that was already there. Only an administrator can add or remove accounts, set someone's password, quit OpenMarker, or choose a folder on this computer.</li>
+            <li>Passwords have at least 10 characters and are stored only as a salted hash. Repeated wrong guesses are slowed down.</li>
+            <li>Forgot a password? On the computer itself, <code>launch password &lt;name&gt;</code> sets a new one.</li>
           </ul>
         </div>
         <figure class="shot">
-          <button type="button" aria-label="Enlarge screenshot: the Settings sheet"><img src="img/settings.webp" width="2040" height="1275" loading="lazy" alt="The Settings sheet, with sections for Connection, Sync, Agenda page and Markdown export, and a Save button."></button>
+          <button type="button" aria-label="Enlarge screenshot: accounts in Settings"><img src="img/accounts.webp" width="2040" height="1275" loading="lazy" alt="The Accounts part of the Settings sheet: Signed in as Ada, Administrator, with Change password and Sign out; a second account, Grace, with Set password and Remove; and Add an account."></button>
+          <figcaption>Accounts, at the bottom of Settings.</figcaption>
+        </figure>
+      </div>
+
+      <div class="show flip">
+        <div class="copy">
+          <h3>Sign in, from here or from elsewhere</h3>
+          <p>With accounts in place, nothing is shown until a browser has signed in. It stays signed in for 30 days, or until you sign out.</p>
+          <p>OpenMarker then also answers through a tunnel, for example <code>ngrok http 8737</code>, which gives it an HTTPS address you can open from anywhere. Without accounts it only ever answers this computer.</p>
+        </div>
+        <figure class="shot">
+          <button type="button" aria-label="Enlarge screenshot: the sign-in sheet"><img src="img/signin.webp" width="2040" height="1275" loading="lazy" alt="A sheet titled Sign in to OpenMarker over an empty page, with Name and Password fields and a Sign in button."></button>
+          <figcaption>Nothing is shown until you have signed in.</figcaption>
         </figure>
       </div>
     </div>

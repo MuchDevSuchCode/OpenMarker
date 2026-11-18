@@ -727,6 +727,7 @@ const trash = async item => {
 };
 const currentFolder = () => state.byId.get(state.folder)?.folder ? state.folder : "";
 const toast = message => {
+  if (message === "Sign in first.") return;  // the sign-in sheet is already up and says as much
   const box = $("toast");
   box.textContent = message;
   if (box.matches(":popover-open")) box.hidePopover();
