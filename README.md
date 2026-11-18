@@ -144,7 +144,7 @@ nothing is sent until you use one.
 | --- | --- | --- |
 | **Summarise** | *Summarise* in a document | Pictures of that document's pages. The summary and its action list can be sent to the tablet as a page. |
 | **Improve with AI** | *Convert to text* in a document | Pictures of that document's handwritten pages, 20 at a time. The text replaces the built-in recogniser's and feeds search. Works on macOS and Linux too. |
-| **Chat with your notes** | The column on the right of the library (in a narrow window: the *AI* menu), *Ask AI* in search results, or right-click a document or folder | The recognised text of your notebooks (the closest pages, if the library is very large) and the conversation so far. Replies appear as they are written and name the pages they rest on; any reply can be sent to the tablet as a page. |
+| **Chat with your notes** | The column on the right of the library (*Hide* puts it away, the *AI* menu brings it back; in a narrow window: the *AI* menu), *Ask AI* in search results, or right-click a document or folder | The recognised text of your notebooks (the closest pages, if the library is very large) and the conversation so far. Replies appear as they are written and name the pages they rest on; any reply can be sent to the tablet as a page. |
 | **Suggest names and folders** | *AI* menu | The names and opening text of the documents in the current folder, and your folder names. Nothing changes until you apply the suggestions you ticked. |
 | **Answer tagged pages** | Set a tag under Settings › AI | After a sync, a picture of each page carrying that tag. The answer arrives as a document next to the notebook. A page is answered again only if it changes. |
 

@@ -154,7 +154,6 @@
   body.chat-docked aside { grid-column: 1; grid-row: 1; }
   body.chat-docked main { grid-column: 2; grid-row: 1; }
   body.chat-docked dialog.sheet.chat { position: static; grid-column: 3; grid-row: 1; width: auto; height: auto; max-height: none; min-height: 0; margin: 0; border: 0; border-left: 1px solid var(--line); border-radius: 0; box-shadow: none; }
-  body.chat-docked #chat-close { display: none; }
   body.chat-docked .chat-head h3 { flex-basis: 100%; }
   body.chat-docked .chat-head label { flex: 1; min-width: 0; }
   body.chat-docked .sheet .chat-head select { flex: 1; min-width: 0; max-width: none; }
@@ -1642,14 +1641,23 @@ const chatPlace = () => state.byId.get(chat.within);
 // Open the chat. `within` is a document or folder to keep to, null for all notes,
 // or left out to carry on with whatever the chat was about.
 const chatRoom = matchMedia("(min-width: 1180px)");
+// Hiding the column is remembered by this browser.
+const chatHidden = () => { try { return localStorage.getItem("openmarker-chat-hidden") === "1"; } catch { return false; } };
+function hideChat(hidden) {
+  try { if (hidden) localStorage.setItem("openmarker-chat-hidden", "1"); else localStorage.removeItem("openmarker-chat-hidden"); } catch {}
+  placeChat();
+}
 const chatDocked = () => document.body.classList.contains("chat-docked");
 // Where the chat is: beside the library while AI is on and the window is wide enough, otherwise a sheet opened on request.
 function placeChat() {
-  const dock = !!state.status?.ai && chatRoom.matches;
+  const dock = !!state.status?.ai && chatRoom.matches && !chatHidden();
+  $("ai-ask").textContent = state.status?.ai && chatRoom.matches && chatHidden() ? "Show the chat" : "Chat with your notes…";
   if (dock === chatDocked()) return;
   const dialog = $("chat"), wasOpen = dialog.open;
   if (wasOpen) dialog.close();
   document.body.classList.toggle("chat-docked", dock);
+  $("chat-close").textContent = dock ? "Hide" : "Close";
+  $("chat-close").title = dock ? "Hide the chat. The AI menu brings it back." : "";
   if (dock) {
     renderChat();
     const focused = document.activeElement;
@@ -1669,6 +1677,7 @@ function openChat(within, question) {
     chat.within = id;
   }
   if (chat.within && !chatPlace()) chat.within = "";  // it was removed meanwhile
+  if (chatHidden()) hideChat(false);  // asking for the chat brings the column back
   renderChat();
   if (!$("chat").open) { if (chatDocked()) $("chat").show(); else $("chat").showModal(); }
   $("chat-input").focus();
@@ -1805,7 +1814,7 @@ $("chat-input").onkeydown = event => {
 // Other notes mean other page numbers and other answers, so a change of scope starts afresh.
 $("chat-scope").onchange = () => { chat.busy?.abort(); chat.busy = null; chat.messages = []; chat.within = $("chat-scope").value; renderChat(); };
 $("chat-new").onclick = () => { chat.busy?.abort(); chat.busy = null; chat.messages = []; renderChat(); $("chat-input").focus(); };
-$("chat-close").onclick = () => $("chat").close();
+$("chat-close").onclick = () => { if (chatDocked()) hideChat(true); else $("chat").close(); };
 $("viewer").addEventListener("close", () => { if (chat.returnTo) { chat.returnTo = false; openChat(); } });
 $("ai-ask").onclick = () => openChat();
 $("ai-tidy").onclick = () => tidy(currentFolder());
