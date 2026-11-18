@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,7 +18,13 @@ TRASH = "trash"
 
 def default_store() -> Path:
     """Location of the desktop app's cache on this machine."""
-    return Path(os.environ["APPDATA"]) / "remarkable" / "desktop"
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    return base / "remarkable" / "desktop"
 
 
 @dataclass

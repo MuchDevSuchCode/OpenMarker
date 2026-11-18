@@ -73,6 +73,10 @@ jobs:
           done
           cat status.json 2>/dev/null || true
           echo
+          pages=ok
+          for path in "" api/library api/config api/outbox "api/search?q=test"; do
+            curl -fsS "http://127.0.0.1:8737/$path" > /dev/null || { pages="failed at /$path"; break; }
+          done
           "$app" --quit || true
           sleep 5
           log="$HOME/openmarker/openmarker.log"
@@ -80,6 +84,11 @@ jobs:
           echo "--- log"; cat "$log" 2>/dev/null || true
           if [ "$answered" != yes ]; then
             echo "::error::The packaged app did not answer: $(tail -n 5 "$log" 2>/dev/null | tr '\n' '|' | cut -c1-900)"
+            exit 1
+          fi
+          if [ "$pages" != ok ]; then
+            echo "::error::The packaged app $pages: $(tail -n 5 "$log" 2>/dev/null | tr '
+' '|' | cut -c1-900)"
             exit 1
           fi
           if curl -fsS http://127.0.0.1:8737/api/status > /dev/null 2>&1; then
