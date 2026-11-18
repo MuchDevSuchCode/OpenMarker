@@ -47,6 +47,11 @@ or supported by the tablet's manufacturer.
   summaries with action lists, more accurate handwriting to text, questions
   answered from your notes, name and folder suggestions, and answers to
   questions you write on the tablet. See [AI features](#ai-features-optional).
+- **Tablet settings.** Change the tablet's name, sleep and power-off times
+  and other settings kept on the tablet. See [Tablet settings](#tablet-settings).
+- **Accounts.** Optional sign-in, with a separate tablet and library for each
+  person, which also makes it safe to reach OpenMarker through a tunnel. See
+  [Accounts](#accounts-and-reaching-openmarker-from-elsewhere).
 - **Hooks.** Run your own command for every document that changes.
 
 ## Install
@@ -185,6 +190,61 @@ writes the files directly and restarts the tablet's app, which blanks and
 locks the screen for a few seconds. Rename, move, trash and new folder always
 use the second route.
 
+### Tablet settings
+
+**Settings › Open tablet settings** reads the settings kept on the tablet
+itself and lets you change them: the device name it announces on the network,
+when it sleeps and powers off, right- or left-handed use, the keyboard
+language, the USB web interface and Wi-Fi. Only the settings your tablet's
+software actually stores are listed.
+
+Switch on **Show advanced settings** in Settings to also see every other
+setting the tablet stores, written as the tablet stores it. OpenMarker does
+not know what those mean, so change one only if you do. Passwords, sign-in
+tokens and saved Wi-Fi networks are never shown and cannot be changed here.
+
+The tablet's app reads its settings only when it starts, so saving a changed
+setting restarts it, which takes a few seconds and closes what is open on the
+tablet. The previous settings file is kept on the tablet as
+`xochitl.conf.openmarker-backup`. Changing only the device name does not
+restart anything; if the tablet keeps its system files read-only it refuses
+the new name, and OpenMarker says so.
+
+### Accounts, and reaching OpenMarker from elsewhere
+
+Out of the box OpenMarker has no accounts: it answers only on the computer it
+runs on, to whoever uses that computer. **Settings › Accounts** adds a
+sign-in:
+
+- The **first account** is the administrator and keeps the library, tablet
+  and settings that are already there. From then on every browser has to sign
+  in, on this computer too.
+- **Each further account** is a separate person: their own tablet (set up
+  with their tablet's password), library copy, version history, search index,
+  settings and API key, in `~/openmarker/accounts/<id>`.
+- An administrator can add and remove accounts, set someone's password, quit
+  OpenMarker and choose the Markdown export folder. Removing an account
+  leaves its folder on disk; removing the last one turns accounts off.
+- Forgot a password? On the computer itself, run `launch password <name>`
+  (or `openmarker-cli password <name>` with the installed app).
+
+With an account in place you can reach OpenMarker from another device through
+a tunnel, for example `ngrok http 8737`. OpenMarker itself still listens only
+on this computer and does not encrypt; the tunnel provides the HTTPS address.
+What protects it:
+
+- Until there is an account, anything arriving through a tunnel is refused,
+  and the first account can only be made on the computer itself.
+- Passwords need at least 10 characters and are stored only as salted scrypt
+  hashes. Five wrong passwords for a name make it wait, longer each time
+  (someone at the computer itself is never locked out).
+- A sign-in lasts 30 days in that browser and ends with **Sign out** or a
+  password change.
+
+Anyone who signs in can read that account's notes and write to its tablet, so
+treat the tunnel address and the passwords accordingly, and stop the tunnel
+when you do not need it.
+
 ## Command line
 
 Everything in the browser is also a command. With the launcher, put the
@@ -200,8 +260,10 @@ command after `launch`:
 | `export <document>` | Export as PDF; `--text` for text, `--markdown DIR` for notes. |
 | `send <file or web address>` | Send a PDF, EPUB, picture or web page. `--as-ink` traces a drawing into pen strokes. |
 | `agenda` | Send today's agenda page. |
+| `password <name>` | Set a new password for an account, for a forgotten one. |
 
-`launch <command> -h` lists the options of a command.
+`launch <command> -h` lists the options of a command. With accounts, the
+commands work on the first account's library.
 
 With the installed app, the same commands are `openmarker-cli <command>` in
 the install folder on Windows (`%LOCALAPPDATA%\Programs\OpenMarker`), and
@@ -223,6 +285,8 @@ Everything stays in the `openmarker` folder in your home directory:
 | `anthropic_key` | Your Anthropic API key, if you saved one for the AI features. Treat it like a password. |
 | `known_hosts` | Your tablet's identity, so nothing else is mistaken for it. |
 | `openmarker.log` | What the installed app would have printed in a terminal. Look here if it does not start. |
+| `accounts.json` | The accounts, if you added any: names, password hashes and signed-in browsers. Deleting it turns accounts off. |
+| `accounts/<id>/` | The same files as above for each account after the first. |
 
 Most settings can be changed in **Settings** in the sidebar; hooks are edited
 in the file. Settings in `config.json`:
@@ -232,6 +296,7 @@ in the file. Settings in `config.json`:
 | `wifi_host` | The tablet's last known Wi-Fi address. Kept up to date automatically. |
 | `tablet_name` | The name the tablet announces on the network. Looked up as `<name>.local` when the address changes; learned on first connection. |
 | `auto_sync` | Sync in the background while OpenMarker is running. |
+| `advanced` | Show every setting the tablet stores in Tablet settings. Off by default. |
 | `calendar` | An `.ics` file or address for the agenda page. |
 | `markdown_dir` | After each sync, export changed notebooks into this folder. |
 | `markdown_tag` | Only export documents carrying this tag. |
@@ -269,8 +334,11 @@ use them on to Anthropic.
 src/openmarker/
     __main__.py   command line
     server.py     local web server and API
+    accounts.py   optional sign-in: accounts, passwords, signed-in browsers
+    paths.py      which data folder is being served
     static/       the browser interface
     tablet.py     SSH: mirroring, uploads, changes on the tablet
+    tabletconfig.py  the tablet's own settings
     workflow.py   finding the tablet, settings, what happens after a sync
     library.py    reads the document store
     scene.py      parses pen-stroke files

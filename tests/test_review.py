@@ -66,7 +66,7 @@ class RequestTests(unittest.TestCase):
         handler.headers = {"Content-Length": str(len(raw))}
         handler.rfile = io.BytesIO(raw)
         handler.path = "/api/config"
-        handler._local_only = lambda: True
+        handler._enter = lambda post: True
         result = []
         handler._json = lambda data, code=200: result.append((code, data))
         handler.do_POST()

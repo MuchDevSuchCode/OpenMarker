@@ -25,6 +25,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import paths
+
 REMOTE_STORE = "/home/root/.local/share/remarkable/xochitl"
 USB_HOST = "10.11.99.1"
 # Device-local caches that are rebuilt on demand and not worth mirroring.
@@ -32,7 +34,7 @@ SKIP = ("rm-search-index.db",)
 
 
 def default_mirror() -> Path:
-    return Path.home() / "openmarker" / "mirror"
+    return paths.data() / "mirror"
 
 
 @dataclass
@@ -52,7 +54,7 @@ class SetupError(RuntimeError):
 
 
 def key_path() -> Path:
-    return Path.home() / "openmarker" / "id_ed25519"
+    return paths.data() / "id_ed25519"
 
 
 def _ssh_args(use_key: bool = True) -> list[str]:

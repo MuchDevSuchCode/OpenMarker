@@ -99,7 +99,15 @@ def _checks() -> list[tuple[str, object]]:
             raise RuntimeError(f"{' and '.join(missing)} not found; the tablet cannot be reached without it")
         return shutil.which("ssh")
 
-    return [("Interface", interface), ("Documents and pages", pages), ("Pictures and pen strokes", drawing),
+    def sign_in() -> str:
+        import hashlib
+
+        from . import accounts
+
+        hashlib.scrypt(b"password", salt=b"0123456789abcdef", **accounts.SCRYPT)
+        return "passwords can be hashed"
+
+    return [("Interface", interface), ("Accounts", sign_in), ("Documents and pages", pages), ("Pictures and pen strokes", drawing),
             ("Handwriting recognition", handwriting), ("Picture cut-out", cutout), ("Calendar", calendar),
             ("AI", assistant), ("Connection to the tablet", remote)]
 

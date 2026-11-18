@@ -603,6 +603,9 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
           <p>The options that matter day to day are together in <b>Settings</b>, at the bottom of the sidebar:</p>
           <ul>
             <li><b>Connection:</b> the tablet's Wi-Fi address and the name it announces on your network.</li>
+            <li><b>Tablet settings:</b> the tablet's own name, when it sleeps and powers off, handedness and more, read from the tablet and saved back to it. Saving restarts the tablet's app.</li>
+            <li><b>Accounts:</b> an optional sign-in. Each account is a separate person with their own tablet, library and settings, and with a sign-in in place OpenMarker can be reached from elsewhere through a tunnel such as ngrok.</li>
+            <li><b>Advanced:</b> shows every setting the tablet stores, as it is stored. Passwords and saved networks stay hidden.</li>
             <li><b>Sync:</b> sync automatically in the background.</li>
             <li><b>Agenda page:</b> the calendar to read events from.</li>
             <li><b>Markdown export:</b> the folder to write notes into, and an optional tag.</li>
@@ -693,6 +696,8 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
             <tr><td><code>id_ed25519</code></td><td>The SSH key that unlocks your tablet. Treat it like a password.</td></tr>
             <tr><td><code>anthropic_key</code></td><td>Your Anthropic API key, if you saved one for the AI features. Treat it like a password.</td></tr>
             <tr><td><code>known_hosts</code></td><td>Your tablet's identity, so nothing else is mistaken for it.</td></tr>
+            <tr><td><code>accounts.json</code></td><td>The accounts, if you added any: names, password hashes and signed-in browsers. Deleting it turns accounts off.</td></tr>
+            <tr><td><code>accounts/&lt;id&gt;/</code></td><td>The same files for each account after the first.</td></tr>
           </tbody>
         </table>
       </div>
@@ -704,7 +709,7 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
       <div>
         <p class="kicker">Privacy</p>
         <h2>Local first, and it means it</h2>
-        <p style="margin-top:16px;color:var(--muted)">The web page is served only to this computer (<code>127.0.0.1</code>) and nothing is sent to any outside service. The exceptions are things you ask for: fetching a web page or calendar you point it at, a one-time model download (about 180 MB) the first time you use the AI cut-out, and, only if you switch them on, the <a href="#ai">AI features</a>.</p>
+        <p style="margin-top:16px;color:var(--muted)">The web page is served only to this computer (<code>127.0.0.1</code>) and nothing is sent to any outside service. If you add accounts you can choose to reach it from elsewhere through a tunnel; until there is an account, anything arriving that way is refused. The exceptions are things you ask for: fetching a web page or calendar you point it at, a one-time model download (about 180 MB) the first time you use the AI cut-out, and, only if you switch them on, the <a href="#ai">AI features</a>.</p>
         <p style="color:var(--muted)">The tablet is recognised by its own key, whatever address it has today, so another device that happens to have the same address is never mistaken for it.</p>
       </div>
       <div>

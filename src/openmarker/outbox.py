@@ -13,13 +13,15 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import paths
+
 KINDS = ("pdf", "epub", "notebook")  # a notebook is its files zipped up
 MAX_TRIES = 5  # failed deliveries before an entry waits to be retried by hand
 _lock = threading.Lock()
 
 
 def folder() -> Path:
-    return Path.home() / "openmarker" / "outbox"
+    return paths.data() / "outbox"
 
 
 def _paths(entry_id: str) -> tuple[Path, Path]:

@@ -11,11 +11,11 @@ import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import library
+from . import library, paths
 
 
 def root() -> Path:
-    return Path.home() / "openmarker" / "history"
+    return paths.data() / "history"
 
 
 def _blob(digest: str) -> Path:

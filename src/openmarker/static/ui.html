@@ -192,8 +192,18 @@
   .setup label { display: block; margin-top: 14px; font-weight: 600; font-size: 13.5px; }
   .setup label small { display: block; font-weight: 400; color: var(--muted); margin: 2px 0 6px; }
   .setup input { width: 100%; }
+  .setup label.set-row { display: grid; margin-top: 8px; font-weight: 400; }
+  .setup label.set-row small { margin: 2px 0 0; }
   .setup ol { margin: 8px 0 0; padding-left: 20px; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
   .setup .error { color: var(--accent); font-size: 13.5px; min-height: 1.4em; margin: 10px 0 0; }
+  .people { margin: 0; padding: 0; list-style: none; }
+  .people li { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+  .people li > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .people li small { color: var(--muted); margin-left: 6px; }
+  .people .set-link, .set-row .value .set-link { margin: 0 0 0 12px; }
+  .settings-body .hint { margin: 10px 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+  .settings-body .sub { margin: 16px 0 0; font: 600 12px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  .set-row .raw-key { font: 12.5px ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
   .stopped { grid-column: 1 / -1; margin: 18vh auto 0; max-width: 460px; padding: 0 24px; text-align: center; }
   .stopped h1 { font-family: var(--serif); font-weight: 600; }
   .stopped p { color: var(--muted); }
@@ -433,6 +443,53 @@
   </form>
 </dialog>
 
+<dialog class="sheet setup" id="signin" aria-labelledby="signin-title">
+  <form id="signin-form">
+    <h3 id="signin-title">Sign in to OpenMarker</h3>
+    <label for="signin-name">Name</label>
+    <input id="signin-name" required maxlength="40" autocomplete="username" autocapitalize="none" spellcheck="false">
+    <label for="signin-password">Password</label>
+    <input id="signin-password" type="password" required maxlength="200" autocomplete="current-password">
+    <p class="error" id="signin-error" role="alert"></p>
+    <div class="row"><button class="pill accent" id="signin-go">Sign in</button></div>
+  </form>
+</dialog>
+
+<dialog class="sheet setup" id="acct" aria-labelledby="acct-title">
+  <form id="acct-form">
+    <h3 id="acct-title"></h3>
+    <p id="acct-text"></p>
+    <label for="acct-name" id="acct-name-label">Name</label>
+    <input id="acct-name" maxlength="40" autocomplete="off" spellcheck="false">
+    <label for="acct-current" id="acct-current-label">Current password</label>
+    <input id="acct-current" type="password" maxlength="200" autocomplete="current-password">
+    <label for="acct-new">New password<small>At least 10 characters.</small></label>
+    <input id="acct-new" type="password" required minlength="10" maxlength="200" autocomplete="new-password">
+    <label for="acct-again">The password again</label>
+    <input id="acct-again" type="password" required maxlength="200" autocomplete="new-password">
+    <label class="set-row inline" id="acct-admin-row"><span><b>Administrator</b><small>May add and remove accounts, and quit OpenMarker.</small></span>
+      <input type="checkbox" class="switch" id="acct-admin" role="switch"></label>
+    <p class="error" id="acct-error" role="alert"></p>
+    <div class="row">
+      <button type="button" class="pill" id="acct-cancel">Cancel</button>
+      <button class="pill accent" id="acct-go">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="sheet settings" id="tablet-sheet" aria-labelledby="tablet-title">
+  <form id="tablet-form">
+    <div class="settings-head"><h3 id="tablet-title">Tablet settings</h3></div>
+    <div class="settings-body" id="tablet-body"></div>
+    <div class="settings-foot">
+      <small>Saving a changed setting restarts the tablet's app, which takes a few seconds.</small>
+      <span class="error" id="tablet-error" role="alert"></span>
+      <button type="button" class="pill" id="tablet-cancel">Cancel</button>
+      <button class="pill accent" id="tablet-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog class="sheet settings" id="settings" aria-labelledby="settings-title">
   <form id="settings-form">
     <div class="settings-head">
@@ -448,6 +505,8 @@
           <span class="affix"><input id="set-name" placeholder="learned automatically" autocomplete="off" spellcheck="false" maxlength="70"><span>.local</span></span></label>
         <div class="set-row inline"><span><b>This computer and the tablet</b><small>If the tablet stops accepting this computer, for example after it was reset, set it up again.</small></span>
           <span class="value"><button type="button" class="set-link" id="set-setup">Set up the tablet again</button></span></div>
+        <div class="set-row inline"><span><b>Tablet settings</b><small>The tablet's name, when it sleeps, and other settings kept on the tablet itself. The tablet has to be connected.</small></span>
+          <span class="value"><button type="button" class="set-link" id="set-tablet">Open tablet settings</button></span></div>
       </section>
       <section class="set-group">
         <h4>Sync</h4>
@@ -497,6 +556,19 @@
           <input type="checkbox" class="switch" id="set-ai-fallback" role="switch"></label>
         <label class="set-row"><span><b>Answer tagged pages</b><small>Write a question on a page, give the page this tag on the tablet, and sync: the answer comes back as a document beside it. Leave empty to turn this off.</small></span>
           <input id="set-ai-tag" placeholder="e.g. ask" autocomplete="off" spellcheck="false" maxlength="100"></label>
+      </section>
+      <section class="set-group">
+        <h4>Accounts</h4>
+        <p class="hint" id="acct-none">OpenMarker has no accounts: it answers only on this computer, to anyone who uses it. Add an account to ask for a sign-in, which is needed before OpenMarker can be reached from elsewhere through a tunnel. The first account is the administrator and keeps the library that is here now; each further account has its own tablet, library and settings.</p>
+        <div class="set-row inline" id="acct-me-row" hidden><span><b id="acct-me"></b><small id="acct-role"></small></span>
+          <span class="value"><button type="button" class="set-link" id="acct-password">Change password</button><button type="button" class="set-link" id="acct-out">Sign out</button></span></div>
+        <ul class="people" id="acct-list"></ul>
+        <div class="set-row inline"><span></span><span class="value"><button type="button" class="set-link" id="acct-add">Add an account</button></span></div>
+      </section>
+      <section class="set-group">
+        <h4>Advanced</h4>
+        <label class="set-row inline"><span><b>Show advanced settings</b><small>Adds every setting the tablet stores to Tablet settings, written as the tablet stores it. A wrong value there can make the tablet misbehave.</small></span>
+          <input type="checkbox" class="switch" id="set-advanced" role="switch"></label>
       </section>
       <section class="set-group">
         <h4>On this computer</h4>
@@ -556,8 +628,27 @@ const el = (tag, props = {}, ...children) => {
 const api = async (path, body) => {
   const res = await fetch(path, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
+  if (res.status === 401 && data.error === "sign-in") { showSignIn(); throw new Error("Sign in first."); }
   if (!res.ok) throw new Error(data.error || "The app could not complete that request.");
   return data;
+};
+// With accounts, nothing is shown until this browser has signed in.
+function showSignIn() {
+  const sheet = $("signin");
+  if (sheet.open) return;
+  for (const open of document.querySelectorAll("dialog[open]")) open.close();
+  sheet.showModal();
+  $("signin-name").focus();
+}
+$("signin").addEventListener("cancel", event => event.preventDefault());  // Escape does not get past it
+$("signin-form").onsubmit = async event => {
+  event.preventDefault();
+  $("signin-go").disabled = true;
+  const result = await api("/api/sign-in", { name: $("signin-name").value, password: $("signin-password").value })
+    .catch(error => ({ ok: false, error: error.message }));
+  $("signin-go").disabled = false;
+  if (!result.ok) { $("signin-error").textContent = result.error || "That didn't work."; $("signin-password").select(); return; }
+  location.reload();
 };
 // Run something that changes the tablet: blocks the page, reports the outcome, reloads.
 async function act(message, request, done) {
@@ -1056,8 +1147,150 @@ function showConnection() {
   $("set-dot").classList.toggle("on", Boolean(s?.connected));
   $("set-conn").textContent = s?.connected ? `Tablet connected · ${s.via}` : "Tablet not connected";
 }
+// Accounts: who may sign in. Shown in Settings; an administrator sees everyone.
+const session = { accounts: false, signed_in: false, admin: false, here: true, name: "", id: "" };
+async function loadAccounts() {
+  Object.assign(session, { admin: false, name: "", id: "" }, await api("/api/session"));
+  const admin = !session.accounts || session.admin;
+  const people = session.accounts ? (await api("/api/accounts")).accounts : [];
+  $("acct-none").hidden = session.accounts;
+  $("acct-me-row").hidden = !session.accounts;
+  $("acct-me").textContent = `Signed in as ${session.name}`;
+  $("acct-role").textContent = session.admin ? "Administrator" : "";
+  $("acct-add").hidden = !admin || (!session.accounts && !session.here);
+  $("acct-add").textContent = session.accounts ? "Add an account" : "Add the first account";
+  $("acct-list").replaceChildren(...people.filter(person => person.id !== session.id || people.length === 1).map(person => el("li", {},
+    el("span", {}, person.name, el("small", { textContent: person.admin ? "Administrator" : "" })),
+    ...(person.id === session.id ? [] : [el("button", { type: "button", className: "set-link", textContent: "Set password", onclick: () => accountSheet("reset", person) })]),
+    el("button", { type: "button", className: "set-link", textContent: person.id === session.id ? "Remove and turn accounts off" : "Remove", onclick: () => removeAccount(person) }))));
+  $("set-quit").hidden = !admin;
+  $("set-md-dir").disabled = !admin;
+}
+// One sheet for adding an account and for changing a password.
+let accountMode = null;
+function accountSheet(mode, person) {
+  accountMode = { mode, person };
+  const first = mode === "add" && !session.accounts;
+  $("acct-form").reset();
+  $("acct-error").textContent = "";
+  $("acct-title").textContent = { add: first ? "Add the first account" : "Add an account", own: "Change your password", reset: `Set a password for ${person?.name}` }[mode];
+  $("acct-text").textContent = first ? "From now on OpenMarker asks for this name and password, on this computer too. Keep the password somewhere safe."
+    : mode === "add" ? "This person gets their own tablet, library and settings on this computer."
+    : mode === "own" ? "Other browsers signed in to your account are signed out." : "They are signed out everywhere and sign in with the new password.";
+  for (const id of ["acct-name", "acct-name-label"]) $(id).hidden = mode !== "add";
+  $("acct-name").required = mode === "add";
+  for (const id of ["acct-current", "acct-current-label"]) $(id).hidden = mode !== "own";
+  $("acct-current").required = mode === "own";
+  $("acct-admin-row").hidden = mode !== "add" || first;
+  $("acct").showModal();
+  $(mode === "add" ? "acct-name" : mode === "own" ? "acct-current" : "acct-new").focus();
+}
+$("acct-add").onclick = () => accountSheet("add");
+$("acct-password").onclick = () => accountSheet("own");
+$("acct-cancel").onclick = () => $("acct").close();
+$("acct").addEventListener("close", () => $("acct-form").reset());  // passwords do not linger in the page
+$("acct-form").onsubmit = async event => {
+  event.preventDefault();
+  const { mode, person } = accountMode;
+  if ($("acct-new").value !== $("acct-again").value) { $("acct-error").textContent = "The two passwords are not the same."; return; }
+  $("acct-go").disabled = true;
+  const request = mode === "add" ? api("/api/account-add", { name: $("acct-name").value, password: $("acct-new").value, admin: $("acct-admin").checked })
+    : api("/api/account-password", { id: person?.id, current: $("acct-current").value, password: $("acct-new").value });
+  const result = await request.catch(error => ({ ok: false, error: error.message }));
+  $("acct-go").disabled = false;
+  if (!result.ok) { $("acct-error").textContent = result.error || "That didn't work."; return; }
+  $("acct").close();
+  toast(mode === "add" ? "Account added" : "Password changed");
+  await loadAccounts();
+};
+async function removeAccount(person) {
+  const last = person.id === session.id;
+  const sure = await ask({ title: last ? "Turn accounts off?" : `Remove ${person.name}?`, ok: last ? "Turn off" : "Remove",
+    text: last ? "OpenMarker stops asking for a sign-in and answers only on this computer again. Your library stays as it is."
+      : "They can no longer sign in. Their library and settings stay in a folder on this computer until you delete it." });
+  if (!sure) return;
+  const result = await api("/api/account-remove", { id: person.id }).catch(error => ({ ok: false, error: error.message }));
+  if (!result.ok) return toast(result.error || "That didn't work.");
+  toast(last ? "Accounts are off" : `Removed. Their data is kept in ${result.kept}`);
+  await loadAccounts();
+}
+$("acct-out").onclick = async () => {
+  await api("/api/sign-out", {}).catch(() => {});
+  location.reload();
+};
+
+// The tablet's own settings, read from the tablet each time the sheet opens.
+let tabletBefore = null;
+const tabletField = setting => {
+  if (setting.kind === "bool") return el("input", { type: "checkbox", className: "switch", role: "switch", checked: setting.value });
+  if (setting.kind === "minutes" || setting.kind === "hours")
+    return el("span", { className: "affix" }, el("input", { type: "number", min: 0, step: "any", required: true, value: setting.value }), el("span", { textContent: setting.kind }));
+  return el("input", { value: setting.value, maxLength: 200, autocomplete: "off", spellcheck: false });
+};
+const tabletValue = (setting, field) => {
+  const input = field.matches("input") ? field : field.querySelector("input");
+  return setting.kind === "bool" ? input.checked : setting.kind === "minutes" || setting.kind === "hours" ? input.valueAsNumber : input.value;
+};
+$("set-tablet").onclick = async () => {
+  const t = await api("/api/tablet-config").catch(error => ({ ok: false, error: error.message }));
+  if (!t.ok) return toast(t.error || "The tablet's settings could not be read.");
+  const name = el("input", { value: t.name, maxLength: 63, autocomplete: "off", spellcheck: false });
+  const rows = [el("label", { className: "set-row" }, el("span", {}, el("b", { textContent: "Device name" }),
+    el("small", { textContent: "The name the tablet announces on your network. Letters, digits and hyphens." })), name)];
+  const fields = [];
+  for (const setting of t.settings) {
+    const field = tabletField(setting);
+    fields.push([setting, field]);
+    rows.push(el("label", { className: setting.kind === "bool" ? "set-row inline" : "set-row" },
+      el("span", {}, el("b", { textContent: setting.label }), el("small", { textContent: setting.help })), field));
+  }
+  if (t.advanced) {
+    rows.push(el("h4", { className: "sub", textContent: "Everything else" }),
+      el("p", { className: "hint", textContent: "Each setting as the tablet stores it. OpenMarker does not know what these mean; change one only if you do." }));
+    for (const setting of t.other) {
+      const field = tabletField(setting);
+      fields.push([setting, field]);
+      rows.push(el("label", { className: "set-row" }, el("span", { className: "raw-key", textContent: setting.key }), field));
+    }
+    if (t.hidden) rows.push(el("p", { className: "hint", textContent: `${t.hidden} setting${t.hidden === 1 ? "" : "s"} that hold passwords, sign-in details or packed data ${t.hidden === 1 ? "is" : "are"} not shown.` }));
+  } else {
+    rows.push(el("p", { className: "hint", textContent: "To see every setting the tablet stores, switch on Advanced in Settings." }));
+  }
+  $("tablet-body").replaceChildren(...rows);
+  $("tablet-error").textContent = "";
+  tabletBefore = { name: t.name, nameField: name, fields };
+  $("tablet-sheet").showModal();
+};
+$("tablet-cancel").onclick = () => $("tablet-sheet").close();
+$("tablet-form").oninput = () => { $("tablet-error").textContent = ""; };
+$("tablet-form").onsubmit = async event => {
+  event.preventDefault();
+  const values = {};
+  for (const [setting, field] of tabletBefore.fields) {
+    const now = tabletValue(setting, field);
+    if (now !== setting.value) values[setting.key] = now;
+  }
+  const name = tabletBefore.nameField.value.trim();
+  const body = { values, ...(name && name !== tabletBefore.name ? { name } : {}) };
+  if (!Object.keys(values).length && !body.name) return $("tablet-sheet").close();
+  if (Object.keys(values).length) {
+    const sure = await ask({ title: "Save to the tablet?", text: "The tablet's app restarts to take the new settings in. Anything open on the tablet closes.", ok: "Save and restart" });
+    if (!sure) return;
+  }
+  $("tablet-save").disabled = true; $("tablet-save").textContent = "Saving…";
+  const result = await api("/api/tablet-config", body).catch(error => ({ ok: false, error: error.message }));
+  $("tablet-save").disabled = false; $("tablet-save").textContent = "Save";
+  if (!result.ok) { $("tablet-error").textContent = result.error || "That didn't work."; return; }
+  $("tablet-sheet").close();
+  if (body.name) $("set-name").value = body.name;
+  toast(result.restarted ? "Saved. The tablet's app is restarting." : "Saved to the tablet");
+};
+
 $("open-settings").onclick = async () => {
   const c = await api("/api/config");
+  await loadAccounts();
+  $("set-tablet").disabled = !(state.status?.connected && state.status?.set_up);
+  $("set-advanced").checked = c.advanced;
   $("set-wifi").value = c.wifi_host;
   $("set-name").value = c.tablet_name;
   $("set-auto").checked = c.auto_sync;
@@ -1115,7 +1348,8 @@ $("settings-form").onsubmit = async event => {
   $("set-save").disabled = true;
   const result = await api("/api/config", {
     wifi_host: $("set-wifi").value, tablet_name: $("set-name").value, auto_sync: $("set-auto").checked,
-    calendar: $("set-calendar").value, markdown_dir: $("set-md-dir").value, markdown_tag: $("set-md-tag").value,
+    advanced: $("set-advanced").checked,
+    calendar: $("set-calendar").value, ...($("set-md-dir").disabled ? {} : { markdown_dir: $("set-md-dir").value }), markdown_tag: $("set-md-tag").value,
     ai_enabled: $("set-ai").checked, ai_model: $("set-ai-model").value, ai_answer_tag: $("set-ai-tag").value,
     ai_effort: $("set-ai-effort").value, ai_fallback: $("set-ai-fallback").checked,
     ...Object.fromEntries(Object.entries(NUMBER_FIELDS).map(([name, id]) => [name, $(id).valueAsNumber])),

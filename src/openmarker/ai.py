@@ -23,7 +23,7 @@ import os
 import re
 from pathlib import Path
 
-from . import export, library, ocr, render, scene, workflow
+from . import export, library, ocr, paths, render, scene, workflow
 
 MODELS = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-2")
 DEFAULT_MODEL = "claude-opus-5-5"
@@ -52,7 +52,7 @@ class AIError(Exception):
 
 
 def key_path() -> Path:
-    return Path.home() / "openmarker" / "anthropic_key"
+    return paths.data() / "anthropic_key"
 
 
 def stored_key() -> str:

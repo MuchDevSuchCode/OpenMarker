@@ -23,7 +23,7 @@ class SetupTests(unittest.TestCase):
             (subprocess, "run", self.fake_run),
             (workflow, "reachable", lambda host, timeout=0.7: True),
             (server.shutil, "which", lambda name: name),
-            (server, "_seen", (None, None)),
+            (server, "_works", {}),
         ):
             patcher = patch.object(target, name, replacement)
             patcher.start()
@@ -53,7 +53,7 @@ class SetupTests(unittest.TestCase):
         self.assertNotIn("s3cret", " ".join(command))  # never on a command line, where other programs could read it
         self.assertIn(f"root@{tablet.USB_HOST}", command)
         self.assertTrue(tablet.is_set_up())
-        self.assertEqual(server._seen, (tablet.USB_HOST, "USB"))
+        self.assertEqual(server._work().seen, (tablet.USB_HOST, "USB"))
         self.assertEqual(workflow.load_config().get("tablet_name"), "paper-tablet")
 
     def test_wifi_address_is_remembered(self):

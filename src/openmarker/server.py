@@ -1,4 +1,4 @@
-"""Local web UI. Serves only on 127.0.0.1."""
+"""The web UI. Listens only on 127.0.0.1; with accounts it may be reached through a tunnel (see accounts.py)."""
 from __future__ import annotations
 
 import io
@@ -11,16 +11,19 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 import webbrowser
 import zipfile
 from datetime import date
 from functools import lru_cache
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import __version__, ai, export, generate, history, images, ink, library, ocr, outbox, render, scene, tablet, workflow
+from . import (__version__, accounts, ai, export, generate, history, images, ink, library, ocr, outbox, paths, render,
+               scene, tablet, tabletconfig, workflow)
 
 PORT = int(os.environ.get("OPENMARKER_PORT") or 8737)  # the variable is for running a second copy, e.g. in tests
 AUTO_SYNC_SECONDS = 30
@@ -38,7 +41,25 @@ ROUTES = {
 }
 SNAPSHOT = re.compile(r"\d{8}T\d{12}Z")
 UI_FILE = Path(__file__).parent / "static" / "ui.html"
-_sync_lock = threading.Lock()
+
+
+class _Work:
+    """What the server keeps in mind for one account (or for the one person, without accounts)."""
+
+    def __init__(self) -> None:
+        self.seen: tuple[str | None, str | None] = (None, None)  # the tablet's address and link, kept current by _watch_tablet
+        self.sync_lock = threading.Lock()
+        self.gone = threading.Event()  # set when the account is removed, to end its background work
+        self.started = False
+
+
+_works: dict[Path, _Work] = {}
+_works_lock = threading.Lock()
+
+
+def _work() -> _Work:
+    with _works_lock:
+        return _works.setdefault(paths.data(), _Work())
 
 
 class UserError(Exception):
@@ -48,15 +69,15 @@ class UserError(Exception):
 def store_dir() -> tuple[Path, str]:
     """The tablet mirror if one exists, otherwise the desktop app's cache."""
     mirror = tablet.default_mirror()
-    if mirror.exists() and any(mirror.glob("*.metadata")):
-        return mirror, "mirror"
+    if (mirror.exists() and any(mirror.glob("*.metadata"))) or paths.data() != paths.root():
+        return mirror, "mirror"  # the desktop app's cache belongs to whoever owns this computer, not to every account
     return library.default_store(), "desktop"
 
 
 def require_tablet() -> str:
     if not tablet.is_set_up():
         raise UserError("Set up the tablet first: choose Set up tablet in the sidebar.")
-    host = _seen[0] or workflow.find_tablet()[0]
+    host = _work().seen[0] or workflow.find_tablet()[0]
     if host is None:
         raise UserError("The tablet isn't reachable. Wake it and connect USB or Wi-Fi.")
     return host
@@ -64,7 +85,6 @@ def require_tablet() -> str:
 
 def setup(body: dict) -> dict:
     """Authorise this computer on the tablet with the tablet's password (the one-time step)."""
-    global _seen
     password = body.get("password")
     if not isinstance(password, str) or not password or len(password) > 200:
         raise UserError("Enter the tablet's password.")
@@ -92,7 +112,7 @@ def setup(body: dict) -> dict:
         workflow.remember_name(host)
     except (RuntimeError, OSError):
         pass
-    _seen = (host, "USB" if host == tablet.USB_HOST else "Wi-Fi")
+    _work().seen = (host, "USB" if host == tablet.USB_HOST else "Wi-Fi")
     return {"ok": True}
 
 
@@ -128,7 +148,7 @@ def send(name: str, kind: str, data: bytes, parent: str = "", setting: str = "")
     """
     if not tablet.is_set_up():
         raise UserError("Set up the tablet first: choose Set up tablet in the sidebar.")
-    host = _seen[0] or workflow.find_tablet()[0]
+    host = _work().seen[0] or workflow.find_tablet()[0]
     if host:
         try:
             _deliver(host, name, kind, data, parent, setting)
@@ -173,7 +193,6 @@ def outbox_json() -> dict:
     ]}
 
 
-_seen: tuple[str | None, str | None] = (None, None)  # the tablet's address and link, kept current by _watch_tablet
 WATCH_SECONDS = 5
 DISCOVER_SECONDS = 15  # how often to look the tablet up by name while it is missing
 
@@ -182,30 +201,30 @@ def _watch_tablet() -> None:
     """Notice the tablet coming and going, find it again by name when its
     Wi-Fi address has changed, and sync as soon as it appears (if auto-sync is
     on, or something is waiting to be sent)."""
-    global _seen
+    work = _work()
     searched = 0.0
-    while True:
+    while not work.gone.is_set():
         try:
             host, via = workflow.find_tablet()
-            if host and host != _seen[0] and tablet.is_set_up() and not tablet.is_ours(host):
+            if host and host != work.seen[0] and tablet.is_set_up() and not tablet.is_ours(host):
                 host, via = None, None  # something else has that address
             if not host and tablet.is_set_up() and time.time() - searched > DISCOVER_SECONDS:
                 searched = time.time()
                 host = workflow.discover()
                 via = "Wi-Fi" if host else None
-            arrived = host is not None and _seen[0] is None
+            arrived = host is not None and work.seen[0] is None
             if arrived and tablet.is_set_up():
                 workflow.remember_name(host)
-            _seen = (host, via)
+            work.seen = (host, via)
             if arrived and tablet.is_set_up() and (workflow.load_config().get("auto_sync") or outbox.waiting()):
                 sync(wait=False)
         except Exception:  # the watcher must never take the server down
             pass
-        time.sleep(WATCH_SECONDS)
+        work.gone.wait(WATCH_SECONDS)
 
 
 def status() -> dict:
-    host, via = _seen
+    host, via = _work().seen
     config = workflow.load_config()
     return {
         "set_up": tablet.is_set_up(),
@@ -231,6 +250,7 @@ def settings_json() -> dict:
         "wifi_host": config.get("wifi_host") or "",
         "tablet_name": config.get("tablet_name") or "",
         "auto_sync": bool(config.get("auto_sync")),
+        "advanced": bool(config.get("advanced")),
         "calendar": config.get("calendar") or "",
         "markdown_dir": config.get("markdown_dir") or "",
         "markdown_tag": config.get("markdown_tag") or "",
@@ -281,6 +301,10 @@ def settings_changes(body: dict) -> dict:
         if not isinstance(body["auto_sync"], bool):
             raise UserError("Automatic sync must be true or false.")
         changes["auto_sync"] = body["auto_sync"]
+    if "advanced" in body:
+        if not isinstance(body["advanced"], bool):
+            raise UserError("Advanced must be true or false.")
+        changes["advanced"] = body["advanced"]
     if "calendar" in body:
         changes["calendar"] = _setting(body, "calendar", "Calendar", 2048) or None
     if "markdown_dir" in body:
@@ -341,6 +365,37 @@ def destination(host: str, setting: str, otherwise: str = "") -> str:
         tablet.restart_app(host)
         time.sleep(6)
     return folder
+
+
+def tablet_settings() -> dict:
+    """The tablet's own settings (see tabletconfig.py)."""
+    host = require_tablet()
+    try:
+        return tabletconfig.read(host, bool(workflow.load_config().get("advanced")))
+    except (RuntimeError, OSError) as exc:
+        raise UserError("The tablet's settings could not be read. Wake the tablet and try again.") from exc
+
+
+def tablet_settings_change(body: dict) -> dict:
+    """Change settings on the tablet, and its name. Changed settings restart the tablet's app."""
+    host = require_tablet()
+    values, name = body.get("values") or {}, body.get("name")
+    lock = _work().sync_lock
+    if not lock.acquire(timeout=60):  # never restart the tablet's app under a sync
+        raise UserError("A sync is running. Try again when it has finished.")
+    try:
+        if name is not None:
+            name = tabletconfig.checked_name(name)  # before anything is changed, so a bad name leaves the tablet as it was
+        restarted = tabletconfig.save(host, values, bool(workflow.load_config().get("advanced"))) if values else False
+        if name and name != tablet.hostname(host):
+            workflow.update_config(tablet_name=tabletconfig.rename(host, name))
+    except tabletconfig.ConfigError as exc:
+        raise UserError(str(exc)) from exc
+    except (RuntimeError, OSError) as exc:
+        raise UserError("The tablet could not be reached. Wake it and try again.") from exc
+    finally:
+        lock.release()
+    return {"ok": True, "restarted": restarted}
 
 
 def api_key_change(body: dict) -> str | None | bool:
@@ -459,7 +514,8 @@ def sync(wait: bool = True) -> dict:
     A sync that was asked for (`wait`) also retries documents that had stopped being retried.
     """
     host = require_tablet()
-    if not _sync_lock.acquire(blocking=wait):
+    lock = _work().sync_lock
+    if not lock.acquire(blocking=wait):
         raise UserError("A sync is already running.")
     try:
         mirror = tablet.default_mirror()
@@ -475,7 +531,7 @@ def sync(wait: bool = True) -> dict:
     except RuntimeError as exc:
         raise UserError(f"Sync failed: {exc}") from exc
     finally:
-        _sync_lock.release()
+        lock.release()
     return {"ok": True, "fetched": len(result.fetched), "removed": len(result.stale), **report, **answers, **delivered}
 
 
@@ -617,8 +673,8 @@ def chat_events(body: dict):
 
 
 def _auto_sync_loop() -> None:
-    while True:
-        time.sleep(AUTO_SYNC_SECONDS)
+    gone = _work().gone
+    while not gone.wait(AUTO_SYNC_SECONDS):
         try:
             if (workflow.load_config().get("auto_sync") or outbox.waiting()) and tablet.is_set_up() and workflow.find_tablet()[0]:
                 sync(wait=False)
@@ -631,12 +687,13 @@ def _follow_tablet() -> None:
 
     The timed sync in _auto_sync_loop stays as the safety net.
     """
-    while True:
+    work = _work()
+    while not work.gone.is_set():
         try:
-            host = _seen[0]
+            host = work.seen[0]
             if host and tablet.is_set_up() and workflow.load_config().get("auto_sync"):
                 for _ in tablet.changes(host):
-                    if not workflow.load_config().get("auto_sync"):
+                    if work.gone.is_set() or not workflow.load_config().get("auto_sync"):
                         break
                     try:
                         sync()  # waits its turn, so a change during another sync is not missed
@@ -644,7 +701,23 @@ def _follow_tablet() -> None:
                         pass
         except Exception:  # the watcher must never take the server down
             pass
-        time.sleep(WATCH_SECONDS)
+        work.gone.wait(WATCH_SECONDS)
+
+
+def _background(folder: Path | None) -> None:
+    """Start the background work for one account's data folder (None: the one person, without accounts)."""
+    def run(task) -> None:
+        paths.use(folder)
+        task()
+
+    with _works_lock:
+        work = _works.setdefault(folder or paths.root(), _Work())
+        if work.started and not work.gone.is_set():
+            return
+        work.started = True
+        work.gone.clear()
+    for task in (_index_existing, _auto_sync_loop, _watch_tablet, _follow_tablet):
+        threading.Thread(target=run, args=(task,), daemon=True).start()
 
 
 def _index_existing() -> None:
@@ -783,9 +856,136 @@ def change(action: str, body: dict, raw: bytes = b"", query: dict | None = None)
     return sync()
 
 
+# Headers that a tunnel or proxy adds to what it passes on. A request with none of them was made on this computer.
+PASSED_ON = ("X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "Forwarded", "X-Real-Ip", "X-Original-Host",
+             "Via", "Cf-Connecting-Ip", "True-Client-Ip")
+SMALL_REQUEST = 4096  # the most that is read from someone who has not signed in
+SIGN_IN = {"error": "sign-in", "app": "openmarker"}
+
+
 class Handler(BaseHTTPRequestHandler):
+    timeout = 120  # a connection that says nothing for this long is dropped
+    account: dict | None = None  # who is signed in, with accounts
+    accounts_on = False
+    here = False                 # asked on this computer itself, not through a tunnel
+    _extra: list = []
+
     def log_message(self, *args) -> None:  # keep the terminal quiet
         pass
+
+    def _enter(self, post: bool) -> bool:
+        """Work out who is asking. Replies and returns False for a request that must not be served at all.
+
+        Without accounts only this computer is served. With accounts anyone may
+        ask, and what needs a sign-in is refused later (`_signed_in`).
+        """
+        paths.use(None)
+        self.account, self.accounts_on, self._extra = None, False, []
+        port = self.server.server_port
+        host = self.headers.get("Host", "")
+        self.here = host in (f"127.0.0.1:{port}", f"localhost:{port}") and not any(self.headers.get(h) for h in PASSED_ON)
+        # Another website's page must not be able to ask in the browser's name.
+        origin = self.headers.get("Origin")
+        ours = {host, self.headers.get("X-Forwarded-Host", "")} - {""}
+        page = not post and urlparse(self.path).path == "/"
+        if ((origin is not None and urlparse(origin).netloc not in ours)
+                or (not page and self.headers.get("Sec-Fetch-Site") == "cross-site")
+                or (post and origin is None and not self.here)):
+            self._json({"error": "forbidden"}, 403)
+            return False
+        try:
+            self.accounts_on = accounts.enabled()
+        except accounts.AccountError as exc:
+            self._json({"error": str(exc) if self.here else "OpenMarker's accounts can't be read."}, 500)
+            return False
+        if not self.accounts_on:
+            if not self.here:
+                self._send(b"OpenMarker has no accounts yet, so it answers only on the computer it runs on. "
+                           b"Open it there and add an account in Settings.", "text/plain; charset=utf-8", 403)
+                return False
+            return True
+        self.account = accounts.signed_in(self._token())
+        if self.account:
+            paths.use(accounts.folder(self.account))
+        return True
+
+    def _signed_in(self) -> bool:
+        return self.account is not None or not self.accounts_on
+
+    def _admin(self) -> bool:
+        return not self.accounts_on or bool(self.account and self.account.get("admin"))
+
+    def _cookie(self) -> str:
+        return f"openmarker_{self.server.server_port}"  # cookies ignore the port, so a second copy needs its own name
+
+    def _token(self) -> str | None:
+        try:
+            found = SimpleCookie(self.headers.get("Cookie", "")).get(self._cookie())
+        except CookieError:
+            return None
+        return found.value if found else None
+
+    def _remember(self, token: str | None) -> None:
+        """Give the browser its session cookie with the reply, or take it away (None)."""
+        secure = "; Secure" if self.headers.get("X-Forwarded-Proto", "").lower() == "https" else ""
+        age = accounts.SESSION_DAYS * 86400 if token else 0
+        self._extra.append(("Set-Cookie", f"{self._cookie()}={token or ''}; Path=/; Max-Age={age}; HttpOnly; SameSite=Lax{secure}"))
+
+    def _session(self) -> dict:
+        who = accounts.public(self.account) if self.account else {}
+        return {"accounts": self.accounts_on, "signed_in": self.account is not None, "here": self.here, **who}
+
+    def _account_action(self, action: str, body: dict) -> dict:
+        """Signing in and out, and managing accounts."""
+        if action == "sign-in":
+            account = accounts.check(body.get("name"), body.get("password"), trusted=self.here)
+            if account is None:
+                raise UserError("That name and password don't match.")
+            self._remember(accounts.sign_in(account["id"]))
+            return {"ok": True}
+        if action == "sign-out":
+            accounts.sign_out(self._token())
+            self._remember(None)
+            return {"ok": True}
+        if action == "account-add":
+            if not self._admin():
+                raise UserError("Only an administrator can add accounts.")
+            first = not self.accounts_on  # only reachable on this computer: see _enter
+            account = accounts.create(body.get("name"), body.get("password"), admin=body.get("admin") is True)
+            if first:
+                self._remember(accounts.sign_in(account["id"]))
+            else:
+                _background(accounts.folder(account))
+            return {"ok": True}
+        if not self.account:
+            raise UserError("Sign in first.")
+        mine = self.account["id"]
+        target = body.get("id") or mine
+        if action == "account-password":
+            if target != mine:
+                if not self._admin():
+                    raise UserError("Only an administrator can change someone else's password.")
+            elif accounts.check(self.account["name"], body.get("current"), trusted=self.here) is None:
+                raise UserError("The current password is not right.")
+            accounts.set_password(target, body.get("password"))
+            if target == mine:  # every browser was signed out; this one stays in
+                self._remember(accounts.sign_in(mine))
+            return {"ok": True}
+        if action == "account-remove":
+            if not self._admin():
+                raise UserError("Only an administrator can remove accounts.")
+            if target == mine and len(accounts.everyone()) > 1:
+                raise UserError("You can't remove the account you are signed in with while there are others.")
+            gone = accounts.remove(target)
+            folder = accounts.folder(gone)
+            if folder != paths.root():
+                with _works_lock:
+                    if folder in _works:
+                        _works[folder].gone.set()
+            if target == mine:
+                self._remember(None)
+            return {"ok": True, "kept": str(folder)}
+        raise UserError("Unknown action.")
 
     def _events(self, events) -> None:
         """Send events one JSON line at a time, as they happen. Stops if the browser stops listening."""
@@ -809,6 +1009,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "private, max-age=20" if cache else "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "same-origin")
+        for name, value in self._extra:
+            self.send_header(name, value)
         if download:
             safe = export.safe_name(download).encode("ascii", "replace").decode("ascii")
             self.send_header("Content-Disposition", f'attachment; filename="{safe}"')
@@ -818,25 +1023,30 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, data: dict, code: int = 200) -> None:
         self._send(json.dumps(data).encode("utf-8"), "application/json", code)
 
-    def _local_only(self) -> bool:
-        """Reject requests that another website's page is making to this server."""
-        host = self.headers.get("Host", "")
-        origin = self.headers.get("Origin")
-        allowed = {f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"}
-        if host not in allowed or (origin and urlparse(origin).netloc not in allowed):
-            self._json({"error": "forbidden"}, 403)
-            return False
-        return True
-
     def do_GET(self) -> None:
-        if not self._local_only():
+        if not self._enter(post=False):
             return
         url = urlparse(self.path)
         path, query = url.path, parse_qs(url.query)
+        if path == "/":  # the page holds nothing private; it asks for a sign-in itself
+            self._send(UI_FILE.read_bytes(), "text/html; charset=utf-8")
+            return
+        if path == "/api/session":
+            self._json(self._session())
+            return
+        if not self._signed_in():
+            self._json(SIGN_IN, 401)
+            return
         store, _ = store_dir()
         match = {name: route.match(path) for name, route in ROUTES.items()}
-        if path == "/":
-            self._send(UI_FILE.read_bytes(), "text/html; charset=utf-8")
+        if path == "/api/accounts":
+            people = accounts.everyone() if self._admin() else [self.account]
+            self._json({"accounts": [accounts.public(a) for a in people if a]})
+        elif path == "/api/tablet-config":
+            try:
+                self._json({"ok": True, **tablet_settings()})
+            except UserError as exc:
+                self._json({"ok": False, "error": str(exc)})
         elif path == "/api/library":
             self._json(library_json())
         elif path == "/api/status":
@@ -895,7 +1105,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
     def do_POST(self) -> None:
-        if not self._local_only():
+        if not self._enter(post=True):
             return
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -904,12 +1114,18 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             self._json({"ok": False, "error": "Invalid request size."}, 400)
             return
-        if length > MAX_UPLOAD:
+        if length > (MAX_UPLOAD if self._signed_in() else SMALL_REQUEST):
+            self.close_connection = True  # what was sent is not read
             self._json({"ok": False, "error": "That file is too large."}, 413)
             return
         raw = self.rfile.read(length)
         url = urlparse(self.path)
         action = url.path.removeprefix("/api/")
+        # A program on this computer (the installer, `--quit`) may stop the app without signing in; a web page may not.
+        quit_here = action == "quit" and self.here and self.headers.get("Origin") is None
+        if not self._signed_in() and action != "sign-in" and not quit_here:
+            self._json(SIGN_IN, 401)
+            return
         body: dict = {}
         if action not in ("upload", "upload-image", "image-preview"):
             try:
@@ -935,15 +1151,24 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("X-Applied-Mode", applied)
                 self.end_headers()
                 self.wfile.write(body_png)
+            elif action in ("sign-in", "sign-out") or action.startswith("account-"):
+                self._json(self._account_action(action, body))
             elif action == "sync":
                 self._json(sync())
             elif action == "setup":
                 self._json(setup(body))
+            elif action == "tablet-config":
+                self._json(tablet_settings_change(body))
             elif action == "quit":
+                if not (self._admin() or quit_here):
+                    raise UserError("Only an administrator can quit OpenMarker.")
                 self._json({"ok": True})
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
             elif action == "config":
                 changes, key = settings_changes(body), api_key_change(body)
+                before = workflow.load_config().get("markdown_dir") or ""
+                if not self._admin() and (changes.get("markdown_dir", before) or "") != before:
+                    raise UserError("Only an administrator can choose a folder on this computer.")
                 workflow.update_config(**changes)
                 if key is not False:
                     ai.save_key(key)
@@ -954,14 +1179,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(ai_action(action, body))
             else:
                 self._json(change(action, body, raw, parse_qs(url.query)))
-        except UserError as exc:
+        except (UserError, accounts.AccountError) as exc:
             self._json({"ok": False, "error": str(exc)})
 
 
 class Server(ThreadingHTTPServer):
     def handle_error(self, request, client_address) -> None:
-        """A browser that went away mid-reply is not worth a traceback in the log."""
-        if not isinstance(sys.exc_info()[1], ConnectionError):
+        """A browser that went away, or went quiet, mid-request is not worth a traceback in the log."""
+        if not isinstance(sys.exc_info()[1], (ConnectionError, TimeoutError)):
             super().handle_error(request, client_address)
 
 
@@ -974,6 +1199,12 @@ def running(port: int = PORT) -> bool:
     try:
         with urllib.request.urlopen(f"{address(port)}api/status", timeout=3) as response:
             return "set_up" in json.loads(response.read())
+    except urllib.error.HTTPError as answer:  # it is running, and wants a sign-in first
+        with answer:
+            try:
+                return json.loads(answer.read()).get("app") == "openmarker"
+            except ValueError:
+                return False
     except (OSError, ValueError):
         return False
 
@@ -985,10 +1216,13 @@ def start(port: int = PORT) -> ThreadingHTTPServer:
         if probe.connect_ex(("127.0.0.1", port)) == 0:
             raise OSError(f"port {port} is already in use")
     server = Server(("127.0.0.1", port), Handler)
-    threading.Thread(target=_index_existing, daemon=True).start()
-    threading.Thread(target=_auto_sync_loop, daemon=True).start()
-    threading.Thread(target=_watch_tablet, daemon=True).start()
-    threading.Thread(target=_follow_tablet, daemon=True).start()
+    try:
+        people = accounts.everyone()
+    except accounts.AccountError as exc:
+        print(exc)
+        people = []
+    for folder in [accounts.folder(a) for a in people] or [None]:
+        _background(folder)
     return server
 
 

@@ -13,7 +13,7 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import scene
+from . import paths, scene
 
 RECOGNISER_SCALE = 0.5  # page units -> recogniser units
 _lock = threading.Lock()
@@ -114,7 +114,7 @@ def page_text(page: scene.Page, lines: list[list[Word]]) -> str:
 
 
 def index_path() -> Path:
-    return Path.home() / "openmarker" / "index.db"
+    return paths.data() / "index.db"
 
 
 def _connect() -> sqlite3.Connection:

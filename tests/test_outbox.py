@@ -29,7 +29,7 @@ class OutboxTests(unittest.TestCase):
             (tablet, "local_hashes", lambda mirror: {}),
             (server.history, "record", lambda *a: None),
             (server.time, "sleep", lambda seconds: None),
-            (server, "_seen", (None, None)),
+            (server, "_works", {}),
         ):
             patcher = patch.object(target, name, replacement)
             patcher.start()

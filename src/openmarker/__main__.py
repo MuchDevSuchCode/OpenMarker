@@ -173,6 +173,26 @@ def cmd_selftest(args: argparse.Namespace) -> None:
     sys.exit(selftest.run())
 
 
+def cmd_password(args: argparse.Namespace) -> None:
+    """For a forgotten password: whoever can run this already has the computer."""
+    import getpass
+
+    from . import accounts
+
+    account = next((a for a in accounts.everyone() if a["name"].casefold() == args.name.casefold()), None)
+    if account is None:
+        names = ", ".join(a["name"] for a in accounts.everyone()) or "there are no accounts"
+        sys.exit(f"No account is called {args.name} ({names}).")
+    password = getpass.getpass(f"New password for {account['name']}: ")
+    if password != getpass.getpass("Again: "):
+        sys.exit("The two passwords are not the same.")
+    try:
+        accounts.set_password(account["id"], password)
+    except accounts.AccountError as exc:
+        sys.exit(str(exc))
+    print(f"Password changed. {account['name']} is signed out everywhere.")
+
+
 def main() -> None:
     if tablet.answer_askpass():  # ssh asking this program for the password during set-up
         return
@@ -230,6 +250,10 @@ def main() -> None:
     agenda.add_argument("--calendar", help=".ics file or address (default: `calendar` in config.json)")
     agenda.add_argument("--host", help=host_help)
     agenda.set_defaults(func=cmd_agenda)
+
+    password = sub.add_parser("password", help="set a new password for an account (for a forgotten one)")
+    password.add_argument("name", help="the account's name")
+    password.set_defaults(func=cmd_password)
 
     selftest = sub.add_parser("selftest", help="check that every part of the app works in this installation")
     selftest.set_defaults(func=cmd_selftest)

@@ -1,12 +1,13 @@
 """What happens around a sync: snapshot, index, exports and user hooks.
 
-Settings live in `~/openmarker/config.json`:
+Settings live in `config.json` in the data folder (`~/openmarker`, or an account's own: see paths.py):
 
     "wifi_host": "192.168.1.50"  the tablet's Wi-Fi address, used when USB is unplugged
     "tablet_name": "my-tablet"
                                  the name the tablet announces on the network; it is
                                  looked up as <name>.local when its address changes
     "auto_sync": true            sync in the background while the UI is running
+    "advanced": true             show every setting the tablet stores (see tabletconfig.py)
     "calendar": "https://…/basic.ics"
                                  calendar (.ics file or address) for the agenda page
     "markdown_dir": "D:/Vault"   after each sync, export changed notebooks there
@@ -25,11 +26,11 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import history, library, tablet
+from . import history, library, paths, tablet
 
 
 def config_path() -> Path:
-    return Path.home() / "openmarker" / "config.json"
+    return paths.data() / "config.json"
 
 
 def load_config() -> dict:
