@@ -121,7 +121,7 @@ def edited(text: str, values: dict, advanced: bool = False) -> str:
         if not isinstance(key, str) or key not in general or not _shown(key, general[key][1]):
             raise ConfigError(f"The tablet has no setting called {str(key)[:80]} that can be changed here.")
         if key not in KNOWN and not advanced:
-            raise ConfigError("Switch on Advanced in Settings to change that setting.")
+            raise ConfigError("Switch on Show advanced settings to change that setting.")
         number, stored = general[key]
         if key in KNOWN and _for_person(KNOWN[key][1], stored) is None:
             raise ConfigError(f"{KNOWN[key][0]} is stored in a way OpenMarker does not know, so it was left alone.")

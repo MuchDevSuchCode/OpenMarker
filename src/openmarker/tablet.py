@@ -77,7 +77,7 @@ def _ssh(host: str, command: str, stdin: bytes | None = None, use_key: bool = Tr
         _ssh_args(use_key) + [f"root@{host}", command], stdout=subprocess.PIPE, check=False, **feed, **QUIET
     )
     if proc.returncode != 0:
-        hint = " (if the tablet no longer accepts this computer, set it up again in Settings)" if use_key else ""
+        hint = " (if the tablet no longer accepts this computer, set it up again under Tablet in the sidebar)" if use_key else ""
         raise RuntimeError(f"ssh to {host} failed with exit code {proc.returncode}{hint}")
     return proc.stdout
 

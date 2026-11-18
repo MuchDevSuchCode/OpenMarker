@@ -321,6 +321,7 @@
     <button class="set-link" id="outbox" hidden aria-haspopup="dialog"></button>
     <button class="btn primary" id="sync" disabled>Sync now</button>
     <div class="notice" id="notice" hidden>One-time step: let this computer talk to your tablet.<button class="btn primary" id="setup-open" aria-haspopup="dialog">Set up tablet</button></div>
+    <button class="btn quiet" id="open-tablet" aria-haspopup="dialog"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M10.5 18h3"/></svg>Tablet</button>
     <button class="btn quiet" id="open-settings" aria-haspopup="dialog"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>Settings</button>
   </div>
 </aside>
@@ -479,21 +480,8 @@
 
 <dialog class="sheet settings" id="tablet-sheet" aria-labelledby="tablet-title">
   <form id="tablet-form">
-    <div class="settings-head"><h3 id="tablet-title">Tablet settings</h3></div>
-    <div class="settings-body" id="tablet-body"></div>
-    <div class="settings-foot">
-      <small>Saving a changed setting restarts the tablet's app, which takes a few seconds.</small>
-      <span class="error" id="tablet-error" role="alert"></span>
-      <button type="button" class="pill" id="tablet-cancel">Cancel</button>
-      <button class="pill accent" id="tablet-save">Save</button>
-    </div>
-  </form>
-</dialog>
-
-<dialog class="sheet settings" id="settings" aria-labelledby="settings-title">
-  <form id="settings-form">
     <div class="settings-head">
-      <h3 id="settings-title">Settings</h3>
+      <h3 id="tablet-title">Tablet</h3>
       <span class="dot" id="set-dot"></span><span class="state" id="set-conn"></span>
     </div>
     <div class="settings-body">
@@ -505,9 +493,32 @@
           <span class="affix"><input id="set-name" placeholder="learned automatically" autocomplete="off" spellcheck="false" maxlength="70"><span>.local</span></span></label>
         <div class="set-row inline"><span><b>This computer and the tablet</b><small>If the tablet stops accepting this computer, for example after it was reset, set it up again.</small></span>
           <span class="value"><button type="button" class="set-link" id="set-setup">Set up the tablet again</button></span></div>
-        <div class="set-row inline"><span><b>Tablet settings</b><small>The tablet's name, when it sleeps, and other settings kept on the tablet itself. The tablet has to be connected.</small></span>
-          <span class="value"><button type="button" class="set-link" id="set-tablet">Open tablet settings</button></span></div>
       </section>
+      <section class="set-group">
+        <h4>On the tablet</h4>
+        <div id="tablet-body"></div>
+      </section>
+      <section class="set-group">
+        <h4>Advanced</h4>
+        <label class="set-row inline"><span><b>Show advanced settings</b><small>Adds every setting the tablet stores, written as the tablet stores it. A wrong value there can make the tablet misbehave.</small></span>
+          <input type="checkbox" class="switch" id="set-advanced" role="switch"></label>
+      </section>
+    </div>
+    <div class="settings-foot">
+      <small id="tablet-note"></small>
+      <span class="error" id="tablet-error" role="alert"></span>
+      <button type="button" class="pill" id="tablet-cancel">Cancel</button>
+      <button class="pill accent" id="tablet-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="sheet settings" id="settings" aria-labelledby="settings-title">
+  <form id="settings-form">
+    <div class="settings-head">
+      <h3 id="settings-title">Settings</h3>
+    </div>
+    <div class="settings-body">
       <section class="set-group">
         <h4>Sync</h4>
         <label class="set-row inline"><span><b>Sync automatically</b><small>Sync in the background while OpenMarker is running, and as soon as the tablet appears.</small></span>
@@ -564,11 +575,6 @@
           <span class="value"><button type="button" class="set-link" id="acct-password">Change password</button><button type="button" class="set-link" id="acct-out">Sign out</button></span></div>
         <ul class="people" id="acct-list"></ul>
         <div class="set-row inline"><span></span><span class="value"><button type="button" class="set-link" id="acct-add">Add an account</button></span></div>
-      </section>
-      <section class="set-group">
-        <h4>Advanced</h4>
-        <label class="set-row inline"><span><b>Show advanced settings</b><small>Adds every setting the tablet stores to Tablet settings, written as the tablet stores it. A wrong value there can make the tablet misbehave.</small></span>
-          <input type="checkbox" class="switch" id="set-advanced" role="switch"></label>
       </section>
       <section class="set-group">
         <h4>On this computer</h4>
@@ -1097,7 +1103,7 @@ $("setup-open").onclick = () => {
   $("setup").showModal();
   $("setup-password").focus();
 };
-$("set-setup").onclick = () => { $("settings").close(); $("setup-open").onclick(); };
+$("set-setup").onclick = () => { $("tablet-sheet").close(); $("setup-open").onclick(); };
 $("setup-cancel").onclick = () => $("setup").close();
 $("setup-form").onsubmit = async event => {
   event.preventDefault();
@@ -1220,7 +1226,7 @@ $("acct-out").onclick = async () => {
 };
 
 // The tablet's own settings, read from the tablet each time the sheet opens.
-let tabletBefore = null;
+const tabletBefore = { wifi: "", known: "", name: "", nameField: null, fields: [] };
 const tabletField = setting => {
   if (setting.kind === "bool") return el("input", { type: "checkbox", className: "switch", role: "switch", checked: setting.value });
   if (setting.kind === "minutes" || setting.kind === "hours")
@@ -1231,12 +1237,22 @@ const tabletValue = (setting, field) => {
   const input = field.matches("input") ? field : field.querySelector("input");
   return setting.kind === "bool" ? input.checked : setting.kind === "minutes" || setting.kind === "hours" ? input.valueAsNumber : input.value;
 };
-$("set-tablet").onclick = async () => {
+// What is kept on the tablet, as rows. Needs the tablet; otherwise it says why there is nothing to show.
+async function showTabletSettings() {
+  const body = $("tablet-body");
+  tabletBefore.fields = []; tabletBefore.nameField = null;
+  $("tablet-note").textContent = "";
+  const s = state.status;
+  if (!s?.set_up || !s?.connected) {
+    body.replaceChildren(el("p", { className: "hint", textContent: s?.set_up ? "Connect the tablet and wake it to see and change the settings kept on it." : "Set up the tablet first; its own settings then appear here while it is connected." }));
+    return;
+  }
+  body.replaceChildren(el("p", { className: "hint", textContent: "Reading the tablet's settings…" }));
   const t = await api("/api/tablet-config").catch(error => ({ ok: false, error: error.message }));
-  if (!t.ok) return toast(t.error || "The tablet's settings could not be read.");
+  if (!t.ok) { body.replaceChildren(el("p", { className: "hint", textContent: t.error || "The tablet's settings could not be read." })); return; }
   const name = el("input", { value: t.name, maxLength: 63, autocomplete: "off", spellcheck: false });
   const rows = [el("label", { className: "set-row" }, el("span", {}, el("b", { textContent: "Device name" }),
-    el("small", { textContent: "The name the tablet announces on your network. Letters, digits and hyphens." })), name)];
+    el("small", { textContent: "The name the tablet gives itself on your network. Letters, digits and hyphens." })), name)];
   const fields = [];
   for (const setting of t.settings) {
     const field = tabletField(setting);
@@ -1253,16 +1269,30 @@ $("set-tablet").onclick = async () => {
       rows.push(el("label", { className: "set-row" }, el("span", { className: "raw-key", textContent: setting.key }), field));
     }
     if (t.hidden) rows.push(el("p", { className: "hint", textContent: `${t.hidden} setting${t.hidden === 1 ? "" : "s"} that hold passwords, sign-in details or packed data ${t.hidden === 1 ? "is" : "are"} not shown.` }));
-  } else {
-    rows.push(el("p", { className: "hint", textContent: "To see every setting the tablet stores, switch on Advanced in Settings." }));
   }
-  $("tablet-body").replaceChildren(...rows);
+  body.replaceChildren(...rows);
+  Object.assign(tabletBefore, { name: t.name, nameField: name, fields });
+  $("tablet-note").textContent = "Saving a changed setting on the tablet restarts its app, which takes a few seconds.";
+}
+$("open-tablet").onclick = async () => {
+  const c = await api("/api/config");
+  $("set-wifi").value = tabletBefore.wifi = c.wifi_host;
+  $("set-name").value = tabletBefore.known = c.tablet_name;
+  $("set-advanced").checked = c.advanced;
   $("tablet-error").textContent = "";
-  tabletBefore = { name: t.name, nameField: name, fields };
+  showConnection();
+  $("sidebar").classList.remove("expanded"); $("nav-toggle").setAttribute("aria-expanded", "false");
   $("tablet-sheet").showModal();
+  await showTabletSettings();
+};
+// Advanced takes effect at once: it only changes what this sheet shows.
+$("set-advanced").onchange = async () => {
+  const result = await api("/api/config", { advanced: $("set-advanced").checked }).catch(error => ({ ok: false, error: error.message }));
+  if (!result.ok) { $("set-advanced").checked = !$("set-advanced").checked; $("tablet-error").textContent = result.error || "That didn't work."; return; }
+  await showTabletSettings();
 };
 $("tablet-cancel").onclick = () => $("tablet-sheet").close();
-$("tablet-form").oninput = () => { $("tablet-error").textContent = ""; };
+$("tablet-form").oninput = event => { if (event.target.id !== "set-advanced") $("tablet-error").textContent = ""; };
 $("tablet-form").onsubmit = async event => {
   event.preventDefault();
   const values = {};
@@ -1270,29 +1300,30 @@ $("tablet-form").onsubmit = async event => {
     const now = tabletValue(setting, field);
     if (now !== setting.value) values[setting.key] = now;
   }
-  const name = tabletBefore.nameField.value.trim();
+  const name = tabletBefore.nameField ? tabletBefore.nameField.value.trim() : "";
   const body = { values, ...(name && name !== tabletBefore.name ? { name } : {}) };
-  if (!Object.keys(values).length && !body.name) return $("tablet-sheet").close();
+  // How OpenMarker reaches the tablet is kept on this computer; the rest is written to the tablet.
+  const reach = { wifi_host: $("set-wifi").value, tablet_name: $("set-name").value };
+  const reachChanged = reach.wifi_host.trim() !== tabletBefore.wifi || reach.tablet_name.trim() !== tabletBefore.known;
+  const onTablet = Object.keys(values).length || body.name;
+  if (!reachChanged && !onTablet) return $("tablet-sheet").close();
   if (Object.keys(values).length) {
     const sure = await ask({ title: "Save to the tablet?", text: "The tablet's app restarts to take the new settings in. Anything open on the tablet closes.", ok: "Save and restart" });
     if (!sure) return;
   }
   $("tablet-save").disabled = true; $("tablet-save").textContent = "Saving…";
-  const result = await api("/api/tablet-config", body).catch(error => ({ ok: false, error: error.message }));
+  let result = reachChanged ? await api("/api/config", reach).catch(error => ({ ok: false, error: error.message })) : { ok: true };
+  if (result.ok && onTablet) result = await api("/api/tablet-config", body).catch(error => ({ ok: false, error: error.message }));
   $("tablet-save").disabled = false; $("tablet-save").textContent = "Save";
   if (!result.ok) { $("tablet-error").textContent = result.error || "That didn't work."; return; }
   $("tablet-sheet").close();
-  if (body.name) $("set-name").value = body.name;
-  toast(result.restarted ? "Saved. The tablet's app is restarting." : "Saved to the tablet");
+  toast(result.restarted ? "Saved. The tablet's app is restarting." : "Saved");
+  loadStatus();
 };
 
 $("open-settings").onclick = async () => {
   const c = await api("/api/config");
   await loadAccounts();
-  $("set-tablet").disabled = !(state.status?.connected && state.status?.set_up);
-  $("set-advanced").checked = c.advanced;
-  $("set-wifi").value = c.wifi_host;
-  $("set-name").value = c.tablet_name;
   $("set-auto").checked = c.auto_sync;
   $("set-calendar").value = c.calendar;
   $("set-md-dir").value = c.markdown_dir;
@@ -1347,8 +1378,7 @@ $("settings-form").onsubmit = async event => {
   if ($("set-ai").checked && !key && !settings.key) { $("set-error").textContent = "Add an API key to turn on AI features."; return; }
   $("set-save").disabled = true;
   const result = await api("/api/config", {
-    wifi_host: $("set-wifi").value, tablet_name: $("set-name").value, auto_sync: $("set-auto").checked,
-    advanced: $("set-advanced").checked,
+    auto_sync: $("set-auto").checked,
     calendar: $("set-calendar").value, ...($("set-md-dir").disabled ? {} : { markdown_dir: $("set-md-dir").value }), markdown_tag: $("set-md-tag").value,
     ai_enabled: $("set-ai").checked, ai_model: $("set-ai-model").value, ai_answer_tag: $("set-ai-tag").value,
     ai_effort: $("set-ai-effort").value, ai_fallback: $("set-ai-fallback").checked,

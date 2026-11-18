@@ -130,7 +130,7 @@ ssh -i ~/openmarker/id_ed25519 root@10.11.99.1 rm-ssh-over-wlan on
 ```
 
 After the first connection OpenMarker finds the tablet on your network by the
-name it announces (mDNS). If your network blocks that, open **Settings** in
+name it announces (mDNS). If your network blocks that, open **Tablet** in
 the sidebar and type the tablet's address into **Wi-Fi address**.
 
 ### AI features (optional)
@@ -192,13 +192,17 @@ use the second route.
 
 ### Tablet settings
 
-**Settings › Open tablet settings** reads the settings kept on the tablet
-itself and lets you change them: the device name it announces on the network,
+Everything about the device is in **Tablet** in the sidebar, apart from the
+app's own **Settings**. Its first part is how OpenMarker reaches the tablet:
+the Wi-Fi address, the name it is found by, and setting the tablet up again.
+
+The second part, **On the tablet**, reads the settings kept on the tablet
+itself while it is connected and lets you change them: the device name it announces on the network,
 when it sleeps and powers off, right- or left-handed use, the keyboard
 language, the USB web interface and Wi-Fi. Only the settings your tablet's
 software actually stores are listed.
 
-Switch on **Show advanced settings** in Settings to also see every other
+Switch on **Show advanced settings** at the bottom of the same sheet to also see every other
 setting the tablet stores, written as the tablet stores it. OpenMarker does
 not know what those mean, so change one only if you do. Passwords, sign-in
 tokens and saved Wi-Fi networks are never shown and cannot be changed here.
@@ -288,7 +292,7 @@ Everything stays in the `openmarker` folder in your home directory:
 | `accounts.json` | The accounts, if you added any: names, password hashes and signed-in browsers. Deleting it turns accounts off. |
 | `accounts/<id>/` | The same files as above for each account after the first. |
 
-Most settings can be changed in **Settings** in the sidebar; hooks are edited
+Most settings can be changed in **Settings** and **Tablet** in the sidebar; hooks are edited
 in the file. Settings in `config.json`:
 
 | Key | Meaning |

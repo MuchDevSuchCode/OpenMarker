@@ -584,7 +584,7 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
           <div class="code"><pre><code>ssh -i ~/openmarker/id_ed25519 root@10.11.99.1 rm-ssh-over-wlan on</code></pre></div>
           <p>In the Windows Command Prompt, write the key's location this way instead:</p>
           <div class="code"><pre><code>ssh -i %USERPROFILE%\openmarker\id_ed25519 root@10.11.99.1 rm-ssh-over-wlan on</code></pre></div>
-          <p>After the first connection OpenMarker finds the tablet on your network by the name it announces (mDNS), and follows it when its address changes. If your network blocks that, open <b>Settings</b> in the sidebar and type the tablet's address into <b>Wi-Fi address</b>, for example <code>192.168.1.50</code>. The name it looks for is shown there too, as <b>Tablet name</b>.</p>
+          <p>After the first connection OpenMarker finds the tablet on your network by the name it announces (mDNS), and follows it when its address changes. If your network blocks that, open <b>Tablet</b> in the sidebar and type the tablet's address into <b>Wi-Fi address</b>, for example <code>192.168.1.50</code>. The name it looks for is shown there too, as <b>Tablet name</b>.</p>
         </li>
         <li>
           <h3>Send without a restart <span class="tag">Optional</span></h3>
@@ -602,9 +602,12 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
           <h3>Everything in one Settings sheet</h3>
           <p>The options that matter day to day are together in <b>Settings</b>, at the bottom of the sidebar:</p>
           <ul>
-            <li><b>Connection:</b> the tablet's Wi-Fi address and the name it announces on your network.</li>
-            <li><b>Tablet settings:</b> the tablet's own name, when it sleeps and powers off, handedness and more, read from the tablet and saved back to it. Saving restarts the tablet's app.</li>
             <li><b>Accounts:</b> an optional sign-in. Each account is a separate person with their own tablet, library and settings, and with a sign-in in place OpenMarker can be reached from elsewhere through a tunnel such as ngrok.</li>
+          </ul>
+          <p>Everything about the device itself is separate, in <b>Tablet</b>:</p>
+          <ul>
+            <li><b>Connection:</b> the tablet's Wi-Fi address, the name it announces on your network, and setting it up again.</li>
+            <li><b>On the tablet:</b> its own name, when it sleeps and powers off, handedness and more, read from the tablet and saved back to it. Saving restarts the tablet's app.</li>
             <li><b>Advanced:</b> shows every setting the tablet stores, as it is stored. Passwords and saved networks stay hidden.</li>
             <li><b>Sync:</b> sync automatically in the background.</li>
             <li><b>Agenda page:</b> the calendar to read events from.</li>
@@ -646,7 +649,7 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
       </div>
 
       <h3 class="sub">Settings</h3>
-      <p style="color:var(--muted)">Most of these can be changed in <b>Settings</b> in the app. They are kept in <code>openmarker/config.json</code> in your home folder. A full example:</p>
+      <p style="color:var(--muted)">Most of these can be changed in <b>Settings</b> and <b>Tablet</b> in the app. They are kept in <code>openmarker/config.json</code> in your home folder. A full example:</p>
       <div class="code"><pre><code>{
   "auto_sync": true,
   "wifi_host": "192.168.1.50",
@@ -735,11 +738,11 @@ launch          <span class="dim"># macOS or Linux: ./launch.sh</span></code></p
           </details>
           <details>
             <summary>Sync fails, or the key is rejected</summary>
-            <div><p>Open <b>Settings</b> and choose <b>Set up the tablet again</b>, with the tablet on USB. It is safe to repeat. A software update or a reset on the tablet can remove the installed key.</p></div>
+            <div><p>Open <b>Tablet</b> in the sidebar and choose <b>Set up the tablet again</b>, with the tablet on USB. It is safe to repeat. A software update or a reset on the tablet can remove the installed key.</p></div>
           </details>
           <details>
             <summary>It doesn't find the tablet on Wi-Fi</summary>
-            <div><p>Some networks block the name lookup (mDNS) that OpenMarker uses. Open <b>Settings</b> and type the tablet's address into <b>Wi-Fi address</b>. You can read the address from the tablet's Wi-Fi settings.</p></div>
+            <div><p>Some networks block the name lookup (mDNS) that OpenMarker uses. Open <b>Tablet</b> in the sidebar and type the tablet's address into <b>Wi-Fi address</b>. You can read the address from the tablet's Wi-Fi settings.</p></div>
           </details>
           <details>
             <summary>The tablet's screen blanks when I send something</summary>
